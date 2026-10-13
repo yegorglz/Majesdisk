@@ -13,12 +13,20 @@ extension ResultsModel {
         Task {
             // Same mode as the original scan: as administrator through the helper, else in-process
             // with one reader on spinning disks.
-            let fresh: FileTree? = admin
-                ? try? await HelperScan().run(root: path, prompt: "MajesDisk wants to rescan this folder as administrator.") { _ in }
-                : await Task.detached(priority: .userInitiated) {
+            let fresh: FileTree?
+            if admin {
+                do {
+                    fresh = try await HelperScan().run(root: path, prompt: "MajesDisk wants to rescan this folder as administrator.") { _ in }
+                } catch {
+                    fresh = nil
+                    alert = AlertInfo(title: "Rescan failed", message: "\(error)")
+                }
+            } else {
+                fresh = await Task.detached(priority: .userInitiated) {
                     let workers = ScanOptions.recommendedConcurrency(isSolidState: ScanSession.diskInfo(for: path)?.isSolidState)
                     return DiskScanner(options: ScanOptions(rootPath: path, maxConcurrency: workers)).run()
                 }.value
+            }
             isRescanning = false
             guard let fresh, !tree.flags(id).contains(.deleted) else { return }
             tree.replaceSubtree(of: id, with: fresh)

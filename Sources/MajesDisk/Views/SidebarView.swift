@@ -20,7 +20,7 @@ struct SidebarView: View {
             .padding(12)
             Divider()
             ScrollViewReader { proxy in
-                List(items, id: \.self, selection: Binding(get: { model.selected }, set: { model.selectFromSidebar($0) })) { id in
+                List(items, id: \.self, selection: Binding(get: { model.selected }, set: { model.sidebarSelectionChanged($0, commandKey: NSEvent.modifierFlags.contains(.command)) })) { id in
                     SidebarRow(model: model, id: id, parentSize: tree.size(folder))
                         .id(id)
                         .listRowBackground(rowBackground(id))

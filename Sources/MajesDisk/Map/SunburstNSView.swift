@@ -15,6 +15,9 @@ final class SunburstNSView: NSView {
     private var oldSegments: [SunburstSegment] = []
     private var transitionStart: Date?
     private var transitionDirection: TransitionDirection = .zoomIn
+    /// The entered folder's wedge (zoom in, from the old map) or the left folder's wedge (zoom out, in the
+    /// new map): children grow out of it / shrink back into it. Nil (e.g. breadcrumb jumps) → plain cross-fade.
+    private var morphSpan: (start: Double, end: Double, depth: Int)?
     private var timer: Timer?
 
     private var magnifyAccumulator: CGFloat = 0
@@ -45,6 +48,10 @@ final class SunburstNSView: NSView {
         if let shown = shownCenter, shown != model.center, !segments.isEmpty {
             oldSegments = segments
             transitionDirection = model.transition
+            let anchor = transitionDirection == .zoomIn
+                ? oldSegments.first { $0.node == model.center && $0.kind != .smallerObjects }
+                : model.segments.first { $0.node == shown && $0.kind != .smallerObjects }
+            morphSpan = anchor.map { ($0.startAngle, $0.endAngle, $0.depth) }
             startTransition()
         }
         shownCenter = model.center
@@ -76,8 +83,17 @@ final class SunburstNSView: NSView {
         bounds.fill()
         if let start = transitionStart {
             let f = MapTransition.frame(t: Date().timeIntervalSince(start) / MapTransition.duration, direction: transitionDirection)
-            draw(oldSegments, in: ctx, model: model, scale: f.outgoingScale, alpha: f.outgoingAlpha, highlight: nil)
-            draw(segments, in: ctx, model: model, scale: f.incomingScale, alpha: f.incomingAlpha, highlight: nil)
+            let e = f.incomingAlpha  // eased progress
+            if let span = morphSpan, transitionDirection == .zoomIn {
+                draw(oldSegments, in: ctx, model: model, scale: 1, alpha: 1 - e, highlight: nil)
+                drawMorphed(segments, from: span, progress: e, in: ctx, model: model)
+            } else if let span = morphSpan {
+                draw(segments, in: ctx, model: model, scale: 1, alpha: e, highlight: nil)
+                drawMorphed(oldSegments, from: span, progress: 1 - e, in: ctx, model: model)
+            } else {
+                draw(oldSegments, in: ctx, model: model, scale: f.outgoingScale, alpha: f.outgoingAlpha, highlight: nil)
+                draw(segments, in: ctx, model: model, scale: f.incomingScale, alpha: f.incomingAlpha, highlight: nil)
+            }
         } else {
             draw(segments, in: ctx, model: model, scale: 1, alpha: 1, highlight: hoveredIndex)
         }
@@ -102,12 +118,40 @@ final class SunburstNSView: NSView {
         ctx.restoreGState()
     }
 
+    /// Segments mid-morph, clipped to the map's outer circle (deep rings start outside it).
+    private func drawMorphed(_ segs: [SunburstSegment], from span: (start: Double, end: Double, depth: Int), progress: Double,
+                             in ctx: CGContext, model: ResultsModel) {
+        ctx.saveGState()
+        ctx.translateBy(x: mapCenter.x, y: mapCenter.y)
+        ctx.addEllipse(in: CGRect(x: -outerRadius, y: -outerRadius, width: 2 * outerRadius, height: 2 * outerRadius))
+        ctx.clip()
+        ctx.setStrokeColor(NSColor.windowBackgroundColor.cgColor)
+        ctx.setLineWidth(0.75)
+        for s in segs {
+            let m = MapTransition.morph(s, from: span, progress: progress)
+            var shown = s
+            (shown.startAngle, shown.endAngle, shown.depth) = (m.startAngle, m.endAngle, Int(m.depth.rounded()))
+            var color = SunburstPalette.color(for: shown, highlighted: false)
+            if s.kind != .smallerObjects, model.collector.contains(s.node) { color.a *= 0.35 }
+            ctx.addPath(wedge(start: m.startAngle, end: m.endAngle, depth: m.depth, outer: outerRadius))
+            ctx.setFillColor(color.nsColor.cgColor)
+            ctx.drawPath(using: .eoFillStroke)
+        }
+        ctx.restoreGState()
+    }
+
     /// Annular wedge around the origin; angle θ clockwise from 12 o'clock maps to CG angle θ − π/2 in y-down space.
     func wedge(_ s: SunburstSegment, outer: Double) -> CGPath {
-        let r = config.radii(depth: s.depth, outerRadius: outer)
-        let a0 = s.startAngle - .pi / 2, a1 = s.endAngle - .pi / 2
+        wedge(start: s.startAngle, end: s.endAngle, depth: Double(s.depth), outer: outer)
+    }
+
+    /// `depth` may be fractional while morphing.
+    func wedge(start: Double, end: Double, depth: Double, outer: Double) -> CGPath {
+        let w = config.ringWidth(outerRadius: outer)
+        let r = (inner: config.centerRadius(outerRadius: outer) + (depth - 1) * w, outer: config.centerRadius(outerRadius: outer) + depth * w)
+        let a0 = start - .pi / 2, a1 = end - .pi / 2
         let p = CGMutablePath()
-        if s.endAngle - s.startAngle >= 2 * .pi - 1e-9 {
+        if end - start >= 2 * .pi - 1e-9 {
             p.addEllipse(in: CGRect(x: -r.outer, y: -r.outer, width: 2 * r.outer, height: 2 * r.outer))
             p.addEllipse(in: CGRect(x: -r.inner, y: -r.inner, width: 2 * r.inner, height: 2 * r.inner))
             return p
