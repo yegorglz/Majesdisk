@@ -15,7 +15,8 @@ struct MajesCommands: Commands {
             Divider()
             Button("Rescan Folder") { results?.perform(.rescanFolder) }.keyboardShortcut("r")
             Button("Rescan Disk") { results?.perform(.rescanAll) }.keyboardShortcut("r", modifiers: [.command, .shift])
-            Button("Forget Scan Results") { AppModel.shared.showOverview() }
+            Button("Forget Scan Results") { if let r = results { AppModel.shared.forget(path: r.tree.rootPath) } }
+                .disabled(results == nil)
         }
         CommandMenu("Disk") {
             Button("Local Snapshots…") {
@@ -28,6 +29,8 @@ struct MajesCommands: Commands {
             Button("Back") { results?.goBack() }.keyboardShortcut("[")
             Button("Forward") { results?.goForward() }.keyboardShortcut("]")
             Button("Open Pointed Folder") { results?.perform(.enter) }
+            Button("Move to Collector") { results?.perform(.toggleCollector) }.keyboardShortcut(.delete, modifiers: .command)
+            Button("Quick Look") { results?.perform(.quickLook) }
             Divider()
             Button("Disks Overview") { AppModel.shared.showOverview() }
         }

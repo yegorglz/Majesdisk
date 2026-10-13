@@ -15,6 +15,7 @@ let package = Package(
         .executableTarget(name: "majes-helper", dependencies: ["MajesCore"]),
         .testTarget(name: "MajesCoreTests", dependencies: ["MajesCore"]),
         .testTarget(name: "MajesMapTests", dependencies: ["MajesMap", "MajesCore"]),
+        .testTarget(name: "MajesDiskTests", dependencies: ["MajesDisk", "MajesCore", "MajesMap"]),
     ],
     swiftLanguageModes: [.v5]
 )

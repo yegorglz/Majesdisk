@@ -164,6 +164,8 @@ final class SunburstNSView: NSView {
             } else if model.hovered != s.node || model.hoveredSmallerObjects != nil {
                 model.hoveredSmallerObjects = nil; model.hovered = s.node
             }
+            // The mouse now points somewhere else; a stale keyboard selection must not receive ⌘⌫.
+            if model.selected != nil, model.selected != model.hovered { model.selected = nil }
         default:
             if model.hovered != nil || model.hoveredSmallerObjects != nil { model.hovered = nil; model.hoveredSmallerObjects = nil }
         }

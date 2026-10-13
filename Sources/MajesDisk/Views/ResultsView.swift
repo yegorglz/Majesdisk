@@ -10,6 +10,14 @@ struct ResultsView: View {
             HSplitView {
                 SidebarView(model: results).frame(minWidth: 260, idealWidth: 300, maxWidth: 360)
                 SunburstView(model: results).frame(minWidth: 420)
+                    // A folder or disk dragged in from Finder starts a new scan; internal drags are ignored.
+                    .dropDestination(for: URL.self) { urls, _ in
+                        var isDir: ObjCBool = false
+                        guard let url = urls.first(where: { $0.isFileURL && FileManager.default.fileExists(atPath: $0.path, isDirectory: &isDir) && isDir.boolValue })
+                        else { return false }
+                        app.startScan(path: url.path, asAdministrator: false)
+                        return true
+                    }
                     .overlay(alignment: .topTrailing) {
                         if results.isRescanning {
                             HStack(spacing: 6) { ProgressView().controlSize(.small); Text("Rescanning…") }

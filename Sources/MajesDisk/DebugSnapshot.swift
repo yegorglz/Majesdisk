@@ -11,9 +11,33 @@ enum DebugSnapshot {
         let path = args[i + 1]
         let delay = args.firstIndex(of: "--snapshot-delay").flatMap { Double(args[$0 + 1]) } ?? 3
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            try? stateDump().write(toFile: path + ".txt", atomically: true, encoding: .utf8)
             capture(to: path)
             NSApp.terminate(nil)
         }
+    }
+
+    /// Text summary of what's on screen; works even when the screen is locked and capture is blank.
+    @MainActor static func stateDump() -> String {
+        let app = AppModel.shared
+        var lines: [String] = []
+        switch app.screen {
+        case .overview:
+            lines.append("screen: overview")
+            lines += app.volumes.map { "volume: \($0.name) \($0.mountPath) free=\($0.freeBytes)" }
+            lines += app.folderList.map { "folder: \($0) cached=\(app.cachedResults[$0] != nil)" }
+        case .scanning(let s):
+            lines.append("screen: scanning \(s.rootPath) admin=\(s.asAdministrator) files=\(s.progress.files)")
+        case .results(let r):
+            lines.append("screen: results \(r.tree.rootPath) admin=\(r.asAdministrator)")
+            lines.append("root size=\(r.tree.size(r.tree.root)) items=\(r.tree.itemCount(r.tree.root)) nodes=\(r.tree.nodeCount)")
+            lines.append("center: \(r.tree.path(r.center))")
+            lines.append("sidebar: " + r.sidebarItems.prefix(8).map { "\(r.displayName($0))=\(r.tree.size($0))" }.joined(separator: ", "))
+            lines.append("collector: \(r.collector.items.map(r.tree.path)) deletion=\(r.deletion.phase)")
+            if let a = r.alert { lines.append("alert: \(a.title) — \(a.message)") }
+        }
+        lines.append("cached: \(app.cachedResults.keys.sorted())")
+        return lines.joined(separator: "\n") + "\n"
     }
 
     @MainActor static func capture(to path: String) {

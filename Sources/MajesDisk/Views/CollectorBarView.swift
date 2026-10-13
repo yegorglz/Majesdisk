@@ -58,13 +58,17 @@ struct CollectorListView: View {
     var body: some View {
         List(model.collector.items, id: \.self) { id in
             HStack(spacing: 8) {
-                Circle().fill(Color(nsColor: model.color(for: id).nsColor)).frame(width: 10, height: 10)
-                VStack(alignment: .leading) {
-                    Text(model.displayName(id)).lineLimit(1)
-                    if model.tree.virtualKind(id) == nil {
-                        Text(model.tree.path(id)).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                HStack(spacing: 8) {
+                    Circle().fill(Color(nsColor: model.color(for: id).nsColor)).frame(width: 10, height: 10)
+                    VStack(alignment: .leading) {
+                        Text(model.displayName(id)).lineLimit(1)
+                        if model.tree.virtualKind(id) == nil {
+                            Text(model.tree.path(id)).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                        }
                     }
                 }
+                .overlay { DragOutHandle(model: model, id: id) }
+                .help("Drag out of the Collector to remove it")
                 Spacer()
                 Text(ByteFormat.string(model.tree.size(id))).monospacedDigit().foregroundStyle(.secondary)
                 Button { model.collector.remove(id) } label: { Image(systemName: "xmark.circle.fill") }

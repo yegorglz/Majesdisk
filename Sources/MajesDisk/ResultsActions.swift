@@ -9,8 +9,16 @@ extension ResultsModel {
         guard !isRescanning else { return }
         isRescanning = true
         let path = tree.path(id)
+        let admin = asAdministrator
         Task {
-            let fresh = await Task.detached(priority: .userInitiated) { DiskScanner(options: ScanOptions(rootPath: path)).run() }.value
+            // Same mode as the original scan: as administrator through the helper, else in-process
+            // with one reader on spinning disks.
+            let fresh: FileTree? = admin
+                ? try? await HelperScan().run(root: path, prompt: "MajesDisk wants to rescan this folder as administrator.") { _ in }
+                : await Task.detached(priority: .userInitiated) {
+                    let workers = ScanOptions.recommendedConcurrency(isSolidState: ScanSession.diskInfo(for: path)?.isSolidState)
+                    return DiskScanner(options: ScanOptions(rootPath: path, maxConcurrency: workers)).run()
+                }.value
             isRescanning = false
             guard let fresh, !tree.flags(id).contains(.deleted) else { return }
             tree.replaceSubtree(of: id, with: fresh)

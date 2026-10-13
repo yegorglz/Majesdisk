@@ -20,12 +20,19 @@ struct SidebarView: View {
             .padding(12)
             Divider()
             ScrollViewReader { proxy in
-                List(items, id: \.self) { id in
+                List(items, id: \.self, selection: Binding(get: { model.selected }, set: { model.selectFromSidebar($0) })) { id in
                     SidebarRow(model: model, id: id, parentSize: tree.size(folder))
                         .id(id)
                         .listRowBackground(rowBackground(id))
                 }
                 .listStyle(.plain)
+                .contextMenu(forSelectionType: NodeID.self) { ids in
+                    if let id = ids.first { NodeContextMenu(model: model, id: id) }
+                } primaryAction: { ids in
+                    // Double-click or Return: open a folder, preview a file.
+                    guard let id = ids.first else { return }
+                    if model.isContainer(id) { model.enter(id) } else { QuickLookController.shared.toggle(path: tree.path(id)) }
+                }
                 .onKeyPress(.space) { QuickLookController.shared.toggle(model: model); return .handled }
                 .onChange(of: model.selected) { _, sel in if let sel { proxy.scrollTo(sel) } }
             }
@@ -35,7 +42,6 @@ struct SidebarView: View {
     }
 
     func rowBackground(_ id: NodeID) -> Color {
-        if id == model.selected { return Color.accentColor.opacity(0.35) }
         if id == model.hovered || id == model.rowHovered { return Color.accentColor.opacity(0.15) }
         return .clear
     }
@@ -71,11 +77,7 @@ struct SidebarRow: View {
         .onHover { inside in
             if inside { model.rowHovered = id } else if model.rowHovered == id { model.rowHovered = nil }
         }
-        .onTapGesture(count: 2) { model.isContainer(id) ? model.enter(id) : QuickLookController.shared.toggle(model: model) }
-        .simultaneousGesture(TapGesture().modifiers(.command).onEnded { model.reveal(id) })
-        .onTapGesture { model.selected = id }
         .onDrag { NSItemProvider(object: ResultsModel.dragURL(for: id) as NSURL) }
-        .contextMenu { NodeContextMenu(model: model, id: id) }
     }
 }
 
