@@ -9,6 +9,7 @@ struct OverviewView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 4) {
+                if model.fullDiskAccess != true { FullDiskAccessBanner().padding(.bottom, 12) }
                 Text("Disks").font(.title2.bold()).padding(.bottom, 4)
                 ForEach(model.volumes) { v in
                     VolumeRowView(volume: v)
@@ -20,11 +21,11 @@ struct OverviewView: View {
                     Button("Scan Folder…") { model.chooseFolderAndScan() }
                 }
                 .padding(.top, 20)
-                if model.starred.isEmpty {
+                if model.folderList.isEmpty {
                     Text("Drag a folder here to scan it. Star scanned folders to keep them in this list.")
                         .font(.callout).foregroundStyle(.secondary).padding(.vertical, 8)
                 }
-                ForEach(model.starred, id: \.self) { p in
+                ForEach(model.folderList, id: \.self) { p in
                     FolderRowView(path: p)
                     Divider()
                 }

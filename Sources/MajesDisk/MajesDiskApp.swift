@@ -15,7 +15,7 @@ struct MajesDiskApp: App {
         }
         .windowToolbarStyle(.unified)
         .commands { MajesCommands() }
-        Settings { Text("Settings").padding() }
+        Settings { SettingsView() }
     }
 }
 

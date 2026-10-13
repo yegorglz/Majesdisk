@@ -11,7 +11,11 @@ final class AppModel {
     var screen: Screen = .overview
     var volumes: [VolumeInfo] = []
     var starred: [String] = StarredFolders().paths
+    /// Folders scanned this session; clicking their icon stars them so they stay across launches.
+    var recentFolders: [String] = []
+    var folderList: [String] { starred + recentFolders.filter { !starred.contains($0) } }
     var optionKeyDown = false
+    var fullDiskAccess = FullDiskAccess.isGranted()
     @ObservationIgnored private var timer: Timer?
     @ObservationIgnored private var flagsMonitor: Any?
     @ObservationIgnored private var handledLaunchArgs = false
@@ -21,6 +25,9 @@ final class AppModel {
         // Free space updates live, as in DaisyDisk.
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { _ in
             Task { @MainActor in AppModel.shared.refreshVolumes() }
+        }
+        NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
+            Task { @MainActor in AppModel.shared.fullDiskAccess = FullDiskAccess.isGranted() }
         }
         flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
             Task { @MainActor in AppModel.shared.optionKeyDown = event.modifierFlags.contains(.option) }
@@ -42,6 +49,7 @@ final class AppModel {
     }
 
     func startScan(path: String, asAdministrator: Bool) {
+        if volume(forPath: path) == nil, !recentFolders.contains(path) { recentFolders.insert(path, at: 0) }
         let session = ScanSession(rootPath: path, asAdministrator: asAdministrator, volume: volume(forPath: path))
         session.onFinish = { [weak self] state in
             guard let self else { return }
@@ -67,6 +75,15 @@ final class AppModel {
         panel.treatsFilePackagesAsDirectories = true
         panel.prompt = "Scan"
         if panel.runModal() == .OK, let url = panel.url { startScan(path: url.path, asAdministrator: false) }
+    }
+
+    /// Full Disk Access only applies to a fresh process.
+    static func relaunch() {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        p.arguments = ["-n", Bundle.main.bundlePath]
+        try? p.run()
+        NSApp.terminate(nil)
     }
 
     func showOverview() {
