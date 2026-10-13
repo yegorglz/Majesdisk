@@ -20,6 +20,9 @@ final class ResultsModel {
     var expandedPackages: Set<NodeID> = []
     var treeVersion = 0
     var transition: TransitionDirection = .zoomIn
+    /// Row under the mouse in the sidebar: highlights its wedge without changing the sidebar folder.
+    var rowHovered: NodeID?
+    @ObservationIgnored private var layoutCache: (key: [Int], segments: [SunburstSegment])?
 
     init(tree: FileTree, volume: VolumeInfo?, asAdministrator: Bool) {
         self.tree = tree; self.volume = volume; self.asAdministrator = asAdministrator
@@ -29,7 +32,30 @@ final class ResultsModel {
     var center: NodeID { history.current }
 
     /// The item the user is pointing at, by mouse or keyboard.
-    var pointed: NodeID? { hovered ?? selected }
+    var pointed: NodeID? { hovered ?? rowHovered ?? selected }
+
+    /// Map wedges for the current center, recomputed only when the center, tree or package expansion changes.
+    var segments: [SunburstSegment] {
+        let key = [Int(center), treeVersion] + expandedPackages.map(Int.init).sorted()
+        if let c = layoutCache, c.key == key { return c.segments }
+        let segs = SunburstLayout.layout(tree: tree, center: center, expandedPackages: expandedPackages)
+        layoutCache = (key, segs)
+        return segs
+    }
+
+    /// The color a node's dot uses in lists: its wedge's color when drawn, otherwise its kind's.
+    func color(for id: NodeID) -> RGBA {
+        if let s = segments.first(where: { $0.node == id && $0.kind != .smallerObjects }) {
+            return SunburstPalette.color(for: s, highlighted: false)
+        }
+        let kind = SunburstLayout.kind(of: id, in: tree)
+        let angle = segments.first(where: { $0.node == tree.parent(id) })?.midAngle ?? 0
+        return SunburstPalette.color(for: SunburstSegment(node: id, aggregateStartIndex: nil, kind: kind, depth: 1, startAngle: angle, endAngle: angle), highlighted: false)
+    }
+
+    func displayName(_ id: NodeID) -> String {
+        id == tree.root ? (volume?.name ?? (tree.rootPath == "/" ? "/" : (tree.rootPath as NSString).lastPathComponent)) : tree.name(id)
+    }
 
     func isContainer(_ id: NodeID) -> Bool {
         let f = tree.flags(id)
@@ -90,7 +116,7 @@ final class ResultsModel {
     }
 
     private func resetPointer() {
-        hovered = nil; hoveredSmallerObjects = nil; expandedSmallerObjects = nil; selected = nil
+        hovered = nil; hoveredSmallerObjects = nil; expandedSmallerObjects = nil; selected = nil; rowHovered = nil
     }
 
     func togglePackage(_ id: NodeID) {

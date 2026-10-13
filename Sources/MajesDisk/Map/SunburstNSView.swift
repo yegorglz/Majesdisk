@@ -8,7 +8,7 @@ final class SunburstNSView: NSView {
     weak var model: ResultsModel?
     let config = SunburstConfig()
     private(set) var segments: [SunburstSegment] = []
-    private var layoutKey: (NodeID, Int, Int)?
+    private var shownCenter: NodeID?
     private var hoveredIndex: Int?
 
     // Transition state
@@ -42,19 +42,15 @@ final class SunburstNSView: NSView {
     /// Called whenever the model changes; recomputes the layout only when its inputs changed.
     func refresh() {
         guard let model else { return }
-        let key = (model.center, model.treeVersion, model.expandedPackages.hashValue)
-        if layoutKey.map({ $0 != key }) ?? true {
-            let centerChanged = layoutKey.map { $0.0 != key.0 } ?? false
-            if centerChanged, !segments.isEmpty {
-                oldSegments = segments
-                transitionDirection = model.transition
-                startTransition()
-            }
-            segments = SunburstLayout.layout(tree: model.tree, center: model.center, config: config, expandedPackages: model.expandedPackages)
-            layoutKey = key
+        if let shown = shownCenter, shown != model.center, !segments.isEmpty {
+            oldSegments = segments
+            transitionDirection = model.transition
+            startTransition()
         }
+        shownCenter = model.center
+        segments = model.segments
         hoveredIndex = segments.firstIndex { s in
-            if let h = model.hovered { return s.kind != .smallerObjects && s.node == h }
+            if let h = model.hovered ?? model.rowHovered { return s.kind != .smallerObjects && s.node == h }
             if let r = model.hoveredSmallerObjects { return s.kind == .smallerObjects && s.node == r.parent && s.aggregateStartIndex == r.start }
             if let sel = model.selected { return s.kind != .smallerObjects && s.node == sel }
             return false
@@ -134,8 +130,8 @@ final class SunburstNSView: NSView {
             let items = tree.children(r.parent).dropFirst(r.start)
             shown = ("\(items.count) smaller objects", items.reduce(0) { $0 + tree.size($1) })
         } else {
-            let id = model.hovered ?? model.center
-            shown = (tree.parent(id) == nil && tree.virtualKind(id) == nil ? displayName(tree.rootPath) : tree.name(id), tree.size(id))
+            let id = model.hovered ?? model.rowHovered ?? model.center
+            shown = (model.displayName(id), tree.size(id))
         }
         let para = NSMutableParagraphStyle()
         para.alignment = .center
@@ -149,10 +145,6 @@ final class SunburstNSView: NSView {
             let up = NSAttributedString(string: "▲", attributes: [.font: NSFont.systemFont(ofSize: 9), .foregroundColor: NSColor.secondaryLabelColor])
             up.draw(at: CGPoint(x: mapCenter.x - up.size().width / 2, y: mapCenter.y - r0 + 10))
         }
-    }
-
-    private func displayName(_ path: String) -> String {
-        model?.volume?.name ?? (path == "/" ? "/" : (path as NSString).lastPathComponent)
     }
 
     // MARK: Mouse
@@ -178,10 +170,8 @@ final class SunburstNSView: NSView {
         NSCursor.arrow.set()
     }
 
-    override func mouseExited(with event: NSEvent) {
-        model?.hovered = nil
-        model?.hoveredSmallerObjects = nil
-    }
+    // Hover stays "sticky" when the mouse leaves the map, so the sidebar keeps the pointed folder's list.
+    override func mouseExited(with event: NSEvent) {}
 
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
