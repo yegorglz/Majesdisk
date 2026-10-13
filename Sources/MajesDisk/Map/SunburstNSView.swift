@@ -207,6 +207,12 @@ final class SunburstNSView: NSView {
         }
     }
 
+    override func menu(for event: NSEvent) -> NSMenu? {
+        guard let model, case .segment(let i) = hit(event), segments[i].kind != .smallerObjects else { return nil }
+        model.hovered = segments[i].node
+        return NodeAction.menu(model: model, id: segments[i].node)
+    }
+
     override func magnify(with event: NSEvent) {
         guard let model else { return }
         if event.phase == .began { magnifyAccumulator = 0 }

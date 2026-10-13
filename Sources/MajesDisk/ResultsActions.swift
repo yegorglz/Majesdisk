@@ -1,11 +1,6 @@
 import MajesCore
 
-// Filled in by Tasks 12, 14 and 18.
-@MainActor final class QuickLookController {
-    static let shared = QuickLookController()
-    func toggle(model: ResultsModel) {}
-}
-
+// Filled in by Tasks 14 and 18.
 extension ResultsModel {
     func toggleCollector(_ id: NodeID) {}
     func rescanFolder(_ id: NodeID) {}
