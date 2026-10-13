@@ -1,5 +1,8 @@
 import Foundation
 
+/// One line of `majes-helper delete` output; `error` is nil, "protected", "notFound", "permissionDenied" or a message.
+public struct HelperDeleteResult: Codable, Equatable, Sendable { public var path: String; public var error: String? }
+
 public struct HelperProgress: Codable, Equatable, Sendable {
     public var files: Int; public var directories: Int; public var bytes: UInt64; public var path: String
 }
@@ -12,6 +15,7 @@ public enum HelperCommand {
         guard let command = arguments.first else { return usage }
         switch command {
         case "scan": return scan(options(Array(arguments.dropFirst())))
+        case "delete": return delete(options(Array(arguments.dropFirst())))
         default: return usage
         }
     }
@@ -50,6 +54,26 @@ public enum HelperCommand {
             return cancelled
         }
         return writeReadable(TreeCodec.encode(tree), to: out) ? 0 : ioError
+    }
+
+    /// `delete --home H <path>...`: permanent delete with the same protection rules as the app.
+    static func delete(_ o: [String: [String]]) -> Int32 {
+        guard let home = o["--home"]?.first, let paths = o[""], !paths.isEmpty else { return usage }
+        let roots = VolumeLister.mountedVolumes().map(\.mountPath)
+        let outcomes = Deleter.delete(paths: paths, mode: .permanent) { ProtectedPaths.verdict(for: $0, homeDirectory: home, volumeRoots: roots) }
+        let encoder = JSONEncoder()
+        for o in outcomes {
+            let error: String?
+            switch o.failure {
+            case nil: error = nil
+            case .protected: error = "protected"
+            case .notFound: error = "notFound"
+            case .permissionDenied: error = "permissionDenied"
+            case .other(let m): error = m
+            }
+            if let data = try? encoder.encode(HelperDeleteResult(path: o.path, error: error)) { print(String(decoding: data, as: UTF8.self)) }
+        }
+        return 0
     }
 
     /// Root writes these; 0644 lets the non-root app read them.

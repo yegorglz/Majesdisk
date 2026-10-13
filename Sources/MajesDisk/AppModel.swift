@@ -21,6 +21,11 @@ final class AppModel {
     @ObservationIgnored private var handledLaunchArgs = false
 
     init() {
+        // Admin-scan work folders left behind by a quit mid-scan.
+        let tmp = FileManager.default.temporaryDirectory
+        for name in (try? FileManager.default.contentsOfDirectory(atPath: tmp.path)) ?? [] where name.hasPrefix("MajesDisk-") {
+            try? FileManager.default.removeItem(at: tmp.appendingPathComponent(name))
+        }
         refreshVolumes()
         // Free space updates live, as in DaisyDisk.
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { _ in

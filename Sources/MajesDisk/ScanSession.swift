@@ -19,6 +19,7 @@ final class ScanSession {
     var state: State = .running
     @ObservationIgnored var onFinish: ((State) -> Void)?
     @ObservationIgnored let cancelFlag = CancelFlag()
+    @ObservationIgnored var cancelFile: String?
 
     init(rootPath: String, asAdministrator: Bool, volume: VolumeInfo?) {
         self.rootPath = rootPath; self.asAdministrator = asAdministrator; self.volume = volume
