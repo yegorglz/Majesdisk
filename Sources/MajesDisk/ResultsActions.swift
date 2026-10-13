@@ -1,12 +1,10 @@
 import MajesCore
 
-// Filled in by Tasks 14 and 18.
+// Filled in by Task 18.
 extension ResultsModel {
-    func toggleCollector(_ id: NodeID) {}
     func rescanFolder(_ id: NodeID) {}
     func rescanAll() {}
 }
 
-/// Placeholder until Task 14.
-struct CollectorPlaceholder { var items: [NodeID] = []; func contains(_ id: NodeID) -> Bool { false } }
-extension ResultsModel { var collector: CollectorPlaceholder { CollectorPlaceholder() } }
+/// Filled in by Task 17.
+enum PurgeAction { @MainActor static func run(model: ResultsModel, node: NodeID) {} }

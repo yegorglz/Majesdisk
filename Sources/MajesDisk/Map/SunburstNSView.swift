@@ -97,7 +97,7 @@ final class SunburstNSView: NSView {
             if s.kind != .smallerObjects, model.collector.contains(s.node) { color.a *= 0.35 }
             ctx.addPath(path)
             ctx.setFillColor(color.nsColor.cgColor)
-            ctx.drawPath(using: .fillStroke)
+            ctx.drawPath(using: .eoFillStroke)  // even-odd keeps full-circle rings hollow
         }
         ctx.restoreGState()
     }
@@ -240,6 +240,34 @@ final class SunburstNSView: NSView {
         }
     }
 
-    /// Wired to the Collector in Task 14.
-    func beginDrag(from point: NSPoint, event: NSEvent) {}
+    /// Drags a wedge toward the Collector. The pasteboard carries an app-internal URL, so dropping
+    /// on Finder never copies files.
+    func beginDrag(from point: NSPoint, event: NSEvent) {
+        guard let model, case .segment(let i) = SunburstHitTest.hit(point: point, center: mapCenter, outerRadius: outerRadius, segments: segments, config: config),
+              segments[i].kind != .smallerObjects else { return }
+        let s = segments[i]
+        let item = NSDraggingItem(pasteboardWriter: ResultsModel.dragURL(for: s.node) as NSURL)
+        item.setDraggingFrame(CGRect(x: point.x - 32, y: point.y - 32, width: 64, height: 64), contents: dragImage(s, model: model))
+        beginDraggingSession(with: [item], event: event, source: self)
+    }
+
+    private func dragImage(_ s: SunburstSegment, model: ResultsModel) -> NSImage {
+        NSImage(size: NSSize(width: 64, height: 64), flipped: true) { rect in
+            guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
+            ctx.translateBy(x: rect.midX, y: rect.midY)
+            let r = self.config.radii(depth: s.depth, outerRadius: self.outerRadius)
+            let scale = 30 / r.outer
+            ctx.scaleBy(x: scale, y: scale)
+            ctx.addPath(self.wedge(s, outer: self.outerRadius))
+            ctx.setFillColor(SunburstPalette.color(for: s, highlighted: true).nsColor.cgColor)
+            ctx.fillPath()
+            return true
+        }
+    }
+}
+
+extension SunburstNSView: NSDraggingSource {
+    func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
+        context == .withinApplication ? .copy : []
+    }
 }
