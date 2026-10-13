@@ -54,3 +54,15 @@ private func seg(_ kind: SegmentKind, at angle: Double = 0, depth: Int = 1) -> S
     #expect(KeyBindings.action(keyCode: 119, modifiers: []) == .selectLast)
     #expect(KeyBindings.action(keyCode: 49, modifiers: .command) == nil)
 }
+
+@Test func morphGrowsChildrenOutOfTheClickedWedge() {
+    let child = SunburstSegment(node: 5, aggregateStartIndex: nil, kind: .file, depth: 1, startAngle: .pi, endAngle: 2 * .pi)
+    let span = (start: 0.5, end: 1.0, depth: 2)
+    let start = MapTransition.morph(child, from: span, progress: 0)
+    #expect(start.startAngle >= 0.5 && start.endAngle <= 1.0 + 1e-9)
+    #expect(abs(start.startAngle - 0.75) < 1e-9 && start.depth == 3)   // halfway through the span, one ring outside it
+    let end = MapTransition.morph(child, from: span, progress: 1)
+    #expect(abs(end.startAngle - .pi) < 1e-9 && abs(end.endAngle - 2 * .pi) < 1e-9 && end.depth == 1)
+    let mid = MapTransition.morph(child, from: span, progress: 0.5)
+    #expect(mid.depth > 1 && mid.depth < 3)
+}

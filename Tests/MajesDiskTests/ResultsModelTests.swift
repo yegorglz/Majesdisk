@@ -35,3 +35,32 @@ import Testing
     m.goUp(); m.enter(dir); m.goUp()
     #expect(m.sidebarFolder == m.center)
 }
+
+@MainActor @Test func commandClickInSidebarRevealsInsteadOfSelecting() {
+    let b = FileTreeBuilder(rootPath: "/r")
+    let f = b.appendChildren(of: b.root, entries: [DirEntry(name: "f", kind: .file, allocatedSize: 1)])[0]
+    let m = ResultsModel(tree: b.finish(), volume: nil, asAdministrator: false)
+    var revealed: [URL] = []
+    ResultsModel.revealInFinder = { revealed.append($0) }
+    defer { ResultsModel.revealInFinder = ResultsModel.defaultReveal }
+    m.sidebarSelectionChanged(f, commandKey: true)
+    #expect(revealed == [URL(fileURLWithPath: "/r/f")] && m.selected == nil)
+    m.sidebarSelectionChanged(f, commandKey: false)
+    #expect(m.selected == f)
+    m.sidebarSelectionChanged(nil, commandKey: true)   // ⌘-click on the selected row deselects in List terms
+    #expect(revealed.count == 2 && m.selected == f)
+}
+
+@MainActor @Test func failedAdminRescanShowsAlert() async throws {
+    let d = FileManager.default.temporaryDirectory.appendingPathComponent("majes-rs-\(UUID().uuidString)").path
+    try FileManager.default.createDirectory(atPath: "\(d)/sub", withIntermediateDirectories: true)
+    let tree = DiskScanner(options: ScanOptions(rootPath: d)).run()!
+    let m = ResultsModel(tree: tree, volume: nil, asAdministrator: true)
+    Helper.elevate = false
+    Helper.pathOverride = "/nonexistent/majes-helper"
+    defer { Helper.elevate = true; Helper.pathOverride = nil }
+    m.rescanFolder(tree.node(atPath: "\(d)/sub")!)
+    for _ in 0..<50 where m.isRescanning { try await Task.sleep(for: .milliseconds(100)) }
+    #expect(!m.isRescanning)
+    #expect(m.alert?.title == "Rescan failed")
+}

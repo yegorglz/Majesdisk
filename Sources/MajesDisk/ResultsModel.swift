@@ -176,8 +176,22 @@ final class ResultsModel {
         selected = items[min(items.count - 1, max(0, target))]
     }
 
+    static let defaultReveal: (URL) -> Void = { NSWorkspace.shared.activateFileViewerSelecting([$0]) }
+    /// Swapped in tests so they don't open Finder windows.
+    static var revealInFinder = defaultReveal
+
     func reveal(_ id: NodeID) {
         guard !tree.flags(id).contains(.virtual) else { return }
-        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: tree.path(id))])
+        Self.revealInFinder(URL(fileURLWithPath: tree.path(id)))
+    }
+
+    /// The sidebar list's selection setter. ⌘-click reveals the row in Finder instead of selecting
+    /// (a ⌘-click on the selected row arrives as a deselect, so `id` is nil then).
+    func sidebarSelectionChanged(_ id: NodeID?, commandKey: Bool) {
+        if commandKey {
+            if let target = id ?? selected { reveal(target) }
+            return
+        }
+        selectFromSidebar(id)
     }
 }

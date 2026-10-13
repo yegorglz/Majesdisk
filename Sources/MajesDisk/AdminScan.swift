@@ -3,14 +3,16 @@ import MajesCore
 
 /// Location of the bundled root helper (falls back to the build folder when run unbundled).
 enum Helper {
+    static var pathOverride: String?  // tests
     static var path: String {
+        if let pathOverride { return pathOverride }
         let bundled = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/majes-helper").path
         if FileManager.default.isExecutableFile(atPath: bundled) { return bundled }
         return Bundle.main.executableURL!.deletingLastPathComponent().appendingPathComponent("majes-helper").path
     }
 
     /// Debug: `--debug-no-elevation` runs the same helper pipeline without the password prompt.
-    static var elevate: Bool { !CommandLine.arguments.contains("--debug-no-elevation") }
+    static var elevate = !CommandLine.arguments.contains("--debug-no-elevation")
 }
 
 /// One `majes-helper scan` run as root: progress is polled from a file, cancel is a file the helper watches.
