@@ -22,6 +22,9 @@ final class ResultsModel {
     var transition: TransitionDirection = .zoomIn
     /// Row under the mouse in the sidebar: highlights its wedge without changing the sidebar folder.
     var rowHovered: NodeID?
+    var collector = Collector()
+    let deletion = DeletionController()
+    var alert: AlertInfo?
     @ObservationIgnored private var layoutCache: (key: [Int], segments: [SunburstSegment])?
 
     init(tree: FileTree, volume: VolumeInfo?, asAdministrator: Bool) {

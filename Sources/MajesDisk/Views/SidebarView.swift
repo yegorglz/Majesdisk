@@ -74,6 +74,7 @@ struct SidebarRow: View {
         .onTapGesture(count: 2) { model.isContainer(id) ? model.enter(id) : QuickLookController.shared.toggle(model: model) }
         .simultaneousGesture(TapGesture().modifiers(.command).onEnded { model.reveal(id) })
         .onTapGesture { model.selected = id }
+        .onDrag { NSItemProvider(object: ResultsModel.dragURL(for: id) as NSURL) }
         .contextMenu { NodeContextMenu(model: model, id: id) }
     }
 }

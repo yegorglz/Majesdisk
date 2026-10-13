@@ -46,7 +46,10 @@ final class AppModel {
         session.onFinish = { [weak self] state in
             guard let self else { return }
             switch state {
-            case .finished(let tree): self.screen = .results(ResultsModel(tree: tree, volume: session.volume, asAdministrator: asAdministrator))
+            case .finished(let tree):
+                let results = ResultsModel(tree: tree, volume: session.volume, asAdministrator: asAdministrator)
+                self.screen = .results(results)
+                self.applyDebugArguments(to: results)
             case .failed(let message):
                 self.screen = .overview
                 let alert = NSAlert(); alert.messageText = "Scan failed"; alert.informativeText = message; alert.runModal()
@@ -69,6 +72,15 @@ final class AppModel {
     func showOverview() {
         screen = .overview
         refreshVolumes()
+    }
+
+    /// Debug: `--collect <path>` (repeatable) fills the Collector; `--delete-collected` starts Delete.
+    private func applyDebugArguments(to results: ResultsModel) {
+        let args = CommandLine.arguments
+        for (i, a) in args.enumerated() where a == "--collect" && i + 1 < args.count {
+            if let id = results.tree.node(atPath: args[i + 1]) { results.addToCollector(id) }
+        }
+        if args.contains("--delete-collected") { results.deletion.begin(model: results) }
     }
 
     /// `--scan <path>` opens straight into a scan (handy for testing).

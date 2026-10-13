@@ -14,6 +14,13 @@ struct ResultsView: View {
             Divider()
             CollectorBarView(model: results)
         }
+        .alert(results.alert?.title ?? "", isPresented: Binding(get: { results.alert != nil }, set: { if !$0 { results.alert = nil } }),
+               presenting: results.alert) { info in
+            if !info.adminRetryPaths.isEmpty {
+                Button("Delete as Administrator") { results.deleteAsAdministrator(info.adminRetryPaths) }
+            }
+            Button("OK", role: .cancel) {}
+        } message: { info in Text(info.message) }
         .toolbar {
             ToolbarItemGroup(placement: .navigation) {
                 Button { results.goBack() } label: { Image(systemName: "chevron.left") }
@@ -32,10 +39,4 @@ struct ResultsView: View {
             }
         }
     }
-}
-
-/// Filled in by Task 14.
-struct CollectorBarView: View {
-    let model: ResultsModel
-    var body: some View { Color.clear.frame(height: 0) }
 }
