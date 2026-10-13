@@ -17,6 +17,9 @@ final class AppModel {
     var optionKeyDown = false
     var fullDiskAccess = FullDiskAccess.isGranted()
     var snapshotsVolume: VolumeInfo?
+    /// Finished scans by root path. Going back to the overview keeps them ("Show"); only Forget drops them.
+    var cachedResults: [String: ResultsModel] = [:]
+    @ObservationIgnored private var refreshing = false
     @ObservationIgnored private var timer: Timer?
     @ObservationIgnored private var flagsMonitor: Any?
     @ObservationIgnored private var handledLaunchArgs = false
@@ -27,7 +30,7 @@ final class AppModel {
         for name in (try? FileManager.default.contentsOfDirectory(atPath: tmp.path)) ?? [] where name.hasPrefix("MajesDisk-") {
             try? FileManager.default.removeItem(at: tmp.appendingPathComponent(name))
         }
-        refreshVolumes()
+        volumes = VolumeLister.mountedVolumes()
         // Free space updates live, as in DaisyDisk.
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { _ in
             Task { @MainActor in AppModel.shared.refreshVolumes() }
@@ -41,9 +44,15 @@ final class AppModel {
         }
     }
 
+    /// Off the main thread, so a stalled network mount can't freeze the UI; one refresh at a time.
     func refreshVolumes() {
-        let v = VolumeLister.mountedVolumes()
-        if v != volumes { volumes = v }
+        guard !refreshing else { return }
+        refreshing = true
+        Task {
+            let v = await Task.detached(priority: .utility) { VolumeLister.mountedVolumes() }.value
+            if v != volumes { volumes = v }
+            refreshing = false
+        }
     }
 
     func volume(forPath path: String) -> VolumeInfo? { volumes.first { $0.mountPath == path } }
@@ -55,6 +64,7 @@ final class AppModel {
     }
 
     func startScan(path: String, asAdministrator: Bool) {
+        leaveResults()
         if volume(forPath: path) == nil, !recentFolders.contains(path) { recentFolders.insert(path, at: 0) }
         let session = ScanSession(rootPath: path, asAdministrator: asAdministrator, volume: volume(forPath: path))
         session.onFinish = { [weak self] state in
@@ -62,7 +72,7 @@ final class AppModel {
             switch state {
             case .finished(let tree):
                 let results = ResultsModel(tree: tree, volume: session.volume, asAdministrator: asAdministrator)
-                self.screen = .results(results)
+                self.present(results)
                 self.applyDebugArguments(to: results)
             case .failed(let message):
                 self.screen = .overview
@@ -92,9 +102,33 @@ final class AppModel {
         NSApp.terminate(nil)
     }
 
+    func present(_ results: ResultsModel) {
+        cachedResults[results.tree.rootPath] = results
+        screen = .results(results)
+    }
+
+    func showResults(for path: String) {
+        guard let r = cachedResults[path] else { return }
+        leaveResults()
+        screen = .results(r)
+    }
+
+    /// Leaving a results screen aborts a pending delete: its Cancel button would no longer be visible.
+    private func leaveResults() {
+        if case .results(let r) = screen { r.deletion.cancel() }
+    }
+
     func showOverview() {
+        leaveResults()
         screen = .overview
         refreshVolumes()
+    }
+
+    /// Frees a scan's memory; its row goes back to "Scan".
+    func forget(path: String) {
+        if case .results(let r) = screen, r.tree.rootPath == path { showOverview() }
+        cachedResults[path]?.deletion.cancel()
+        cachedResults[path] = nil
     }
 
     /// Debug: `--collect <path>` (repeatable) fills the Collector; `--delete-collected` starts Delete.

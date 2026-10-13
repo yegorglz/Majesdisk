@@ -25,18 +25,7 @@ struct VolumeRowView: View {
                     .help("\(ByteFormat.string(volume.usedBytes)) used")
             }
             Spacer(minLength: 12)
-            Menu {
-                Button("Scan") { model.startScan(path: volume.mountPath, asAdministrator: false) }
-                Button("Scan as Administrator") { model.startScan(path: volume.mountPath, asAdministrator: true) }
-                Divider()
-                Button("Local Snapshots…") { model.showSnapshots(for: volume) }
-            } label: {
-                Text("Scan")
-            } primaryAction: {
-                model.startScan(path: volume.mountPath, asAdministrator: false)
-            }
-            .menuStyle(.borderedButton)
-            .fixedSize()
+            ScanMenuButton(path: volume.mountPath, volume: volume)
         }
         .padding(.vertical, 8)
     }
@@ -62,8 +51,40 @@ struct FolderRowView: View {
                 Text(path).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
             }
             Spacer()
-            Button("Scan") { model.startScan(path: path, asAdministrator: false) }
+            ScanMenuButton(path: path, volume: nil)
         }
         .padding(.vertical, 6)
+    }
+}
+
+/// DaisyDisk's split button: "Scan" before a scan, "Show" once results exist (kept until forgotten).
+struct ScanMenuButton: View {
+    @Environment(AppModel.self) private var model
+    let path: String
+    let volume: VolumeInfo?
+
+    var body: some View {
+        let cached = model.cachedResults[path] != nil
+        Menu {
+            if cached {
+                Button("Show") { model.showResults(for: path) }
+                Button("Rescan") { model.startScan(path: path, asAdministrator: false) }
+                Button("Rescan as Administrator") { model.startScan(path: path, asAdministrator: true) }
+                Button("Forget Scan Results") { model.forget(path: path) }
+            } else {
+                Button("Scan") { model.startScan(path: path, asAdministrator: false) }
+                Button("Scan as Administrator") { model.startScan(path: path, asAdministrator: true) }
+            }
+            if let volume {
+                Divider()
+                Button("Local Snapshots…") { model.showSnapshots(for: volume) }
+            }
+        } label: {
+            Text(cached ? "Show" : "Scan")
+        } primaryAction: {
+            cached ? model.showResults(for: path) : model.startScan(path: path, asAdministrator: false)
+        }
+        .menuStyle(.borderedButton)
+        .fixedSize()
     }
 }

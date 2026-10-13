@@ -36,7 +36,9 @@ final class ResultsModel {
     var center: NodeID { history.current }
 
     /// The item the user is pointing at, by mouse or keyboard.
-    var pointed: NodeID? { hovered ?? rowHovered ?? selected }
+    var pointed: NodeID? { hovered ?? selected ?? rowHovered }
+    /// Folder the sidebar stays on after the user picks one of its rows (instead of snapping back to the center).
+    var sidebarAnchor: NodeID?
 
     /// Map wedges for the current center, recomputed only when the center, tree or package expansion changes.
     var segments: [SunburstSegment] {
@@ -71,7 +73,17 @@ final class ResultsModel {
     var sidebarFolder: NodeID {
         if let s = hoveredSmallerObjects { return s.parent }
         if let h = hovered { return isContainer(h) && !tree.children(h).isEmpty ? h : (tree.parent(h) ?? center) }
-        return center
+        return sidebarAnchor ?? center
+    }
+
+    /// A row picked in the sidebar: keep that list on screen and let the keyboard drive from there.
+    func selectFromSidebar(_ id: NodeID?) {
+        guard id != selected else { return }
+        if id != nil, hovered != nil || hoveredSmallerObjects != nil {
+            sidebarAnchor = sidebarFolder
+            hovered = nil; hoveredSmallerObjects = nil
+        }
+        selected = id
     }
 
     var sidebarItems: [NodeID] {
@@ -120,7 +132,7 @@ final class ResultsModel {
     }
 
     private func resetPointer() {
-        hovered = nil; hoveredSmallerObjects = nil; expandedSmallerObjects = nil; selected = nil; rowHovered = nil
+        hovered = nil; hoveredSmallerObjects = nil; expandedSmallerObjects = nil; selected = nil; rowHovered = nil; sidebarAnchor = nil
     }
 
     func togglePackage(_ id: NodeID) {
@@ -144,8 +156,13 @@ final class ResultsModel {
         case .enter:
             if let s = hoveredSmallerObjects { expandSmallerObjects(s) } else if let p = pointed { enter(p) }
         case .quickLook: QuickLookController.shared.toggle(model: self)
-        case .toggleCollector: if let p = pointed { toggleCollector(p) }
-        case .rescanFolder: rescanFolder(pointed.flatMap { isContainer($0) ? $0 : nil } ?? center)
+        case .toggleCollector:
+            if hoveredSmallerObjects != nil {
+                alert = AlertInfo(title: "Smaller objects can't be collected",
+                                  message: "Open the group (click it or press Return) and collect its files individually.")
+            } else if let p = pointed { toggleCollector(p) }
+        case .rescanFolder:
+            rescanFolder(hoveredSmallerObjects?.parent ?? pointed.flatMap { isContainer($0) ? $0 : nil } ?? center)
         case .rescanAll: rescanAll()
         }
     }
