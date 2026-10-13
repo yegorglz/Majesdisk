@@ -10,6 +10,12 @@ struct ResultsView: View {
             HSplitView {
                 SidebarView(model: results).frame(minWidth: 260, idealWidth: 300, maxWidth: 360)
                 SunburstView(model: results).frame(minWidth: 420)
+                    .overlay(alignment: .topTrailing) {
+                        if results.isRescanning {
+                            HStack(spacing: 6) { ProgressView().controlSize(.small); Text("Rescanning…") }
+                                .padding(8).background(.regularMaterial, in: Capsule()).padding(12)
+                        }
+                    }
             }
             Divider()
             CollectorBarView(model: results)

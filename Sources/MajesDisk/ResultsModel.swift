@@ -25,6 +25,7 @@ final class ResultsModel {
     var collector = Collector()
     let deletion = DeletionController()
     var alert: AlertInfo?
+    var isRescanning = false
     @ObservationIgnored private var layoutCache: (key: [Int], segments: [SunburstSegment])?
 
     init(tree: FileTree, volume: VolumeInfo?, asAdministrator: Bool) {

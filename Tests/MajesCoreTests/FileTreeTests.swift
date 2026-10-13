@@ -57,3 +57,18 @@ func sampleTree() -> FileTree {
     #expect(t.node(atPath: "/Users") != nil)
     #expect(t.node(atPath: "/") == t.root)
 }
+
+@Test func replaceSubtreeSplicesAndAdjustsSizes() {
+    let t = sampleTree()
+    let a = t.node(atPath: "/r/a")!
+    let b = FileTreeBuilder(rootPath: "/r/a")
+    b.appendChildren(of: b.root, entries: [DirEntry(name: "x", kind: .file, allocatedSize: 50), DirEntry(name: "y", kind: .file, allocatedSize: 25)])
+    t.replaceSubtree(of: a, with: b.finish())
+    #expect(t.size(a) == 75)
+    #expect(t.size(t.root) == 175)
+    #expect(t.children(a).map(t.name) == ["x", "y"])
+    #expect(t.node(atPath: "/r/a/g") == nil)
+    #expect(t.node(atPath: "/r/a/x") != nil)
+    #expect(t.itemCount(t.root) == 5)
+    #expect(t.children(t.root).map(t.name) == ["f", "a", "e"])
+}
