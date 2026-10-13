@@ -30,6 +30,7 @@ struct RootView: View {
             case .results(let results): ResultsView(results: results)
             }
         }
+        .sheet(item: Binding(get: { model.snapshotsVolume }, set: { model.snapshotsVolume = $0 })) { SnapshotsSheet(volume: $0) }
         .onAppear { model.handleLaunchArguments(); DebugSnapshot.scheduleIfRequested() }
     }
 }

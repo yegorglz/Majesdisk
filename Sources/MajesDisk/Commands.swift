@@ -17,6 +17,12 @@ struct MajesCommands: Commands {
             Button("Rescan Disk") { results?.perform(.rescanAll) }.keyboardShortcut("r", modifiers: [.command, .shift])
             Button("Forget Scan Results") { AppModel.shared.showOverview() }
         }
+        CommandMenu("Disk") {
+            Button("Local Snapshots…") {
+                let app = AppModel.shared
+                if let v = results?.volume ?? app.volumes.first { app.showSnapshots(for: v) }
+            }
+        }
         CommandMenu("Go") {
             Button("Enclosing Folder") { results?.goUp() }.keyboardShortcut(.upArrow)
             Button("Back") { results?.goBack() }.keyboardShortcut("[")
