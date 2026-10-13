@@ -26,6 +26,7 @@ struct SidebarView: View {
                         .listRowBackground(rowBackground(id))
                 }
                 .listStyle(.plain)
+                .onKeyPress(.space) { QuickLookController.shared.toggle(model: model); return .handled }
                 .onChange(of: model.selected) { _, sel in if let sel { proxy.scrollTo(sel) } }
             }
             Divider()
