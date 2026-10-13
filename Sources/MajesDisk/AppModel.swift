@@ -16,6 +16,7 @@ final class AppModel {
     var folderList: [String] { starred + recentFolders.filter { !starred.contains($0) } }
     var optionKeyDown = false
     var fullDiskAccess = FullDiskAccess.isGranted()
+    var snapshotsVolume: VolumeInfo?
     @ObservationIgnored private var timer: Timer?
     @ObservationIgnored private var flagsMonitor: Any?
     @ObservationIgnored private var handledLaunchArgs = false
@@ -117,5 +118,5 @@ final class AppModel {
 }
 
 extension AppModel {
-    func showSnapshots(for volume: VolumeInfo) {}
+    func showSnapshots(for volume: VolumeInfo) { snapshotsVolume = volume }
 }
