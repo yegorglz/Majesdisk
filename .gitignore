@@ -1,0 +1,5 @@
+.build/
+dist/
+*.iconset/
+.DS_Store
+.superpowers/
