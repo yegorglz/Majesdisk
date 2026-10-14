@@ -17,6 +17,8 @@ public struct Collector: Sendable {
 
     public mutating func remove(_ id: NodeID) { items.removeAll { $0 == id } }
     public mutating func removeAll() { items.removeAll() }
+    /// After `FileTree.compact()`.
+    public mutating func remap(_ map: [NodeID: NodeID]) { items = items.compactMap { map[$0] } }
     public func contains(_ id: NodeID) -> Bool { items.contains(id) }
     public func totalSize(in tree: FileTree) -> UInt64 { items.reduce(0) { $0 + tree.size($1) } }
 }

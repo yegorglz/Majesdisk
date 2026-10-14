@@ -42,6 +42,7 @@ extension ResultsModel {
             history = NavigationHistory(start: center)  // older entries may point into the replaced subtrees
             hovered = nil; rowHovered = nil; selected = nil; hoveredSmallerObjects = nil; expandedSmallerObjects = nil
             treeVersion += 1
+            compactIfNeeded()
         }
     }
 

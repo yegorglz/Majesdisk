@@ -108,3 +108,18 @@ import Testing
     m.expandSmallerObjects(SmallerObjectsRef(parent: tree.root, start: 1))
     #expect(m.sidebarItems.count == 300 && m.sidebarFold == nil)
 }
+
+@MainActor @Test func compactionKeepsWhatTheScreenShows() {
+    let b = FileTreeBuilder(rootPath: "/r")
+    let dirs = b.appendChildren(of: b.root, entries: [DirEntry(name: "junk", kind: .directory), DirEntry(name: "keep", kind: .directory)])
+    b.appendChildren(of: dirs[0], entries: (0..<50).map { DirEntry(name: "j\($0)", kind: .file, allocatedSize: 1) })
+    let kept = b.appendChildren(of: dirs[1], entries: [DirEntry(name: "k", kind: .file, allocatedSize: 9)])[0]
+    let m = ResultsModel(tree: b.finish(), volume: nil, asAdministrator: false)
+    m.enter(dirs[1])
+    m.addToCollector(kept)
+    m.tree.markDeleted(dirs[0])          // 51 dead nodes vs 4 live
+    m.compactIfNeeded()
+    #expect(m.tree.nodeCount == 3)
+    #expect(m.tree.path(m.center) == "/r/keep")
+    #expect(m.collector.items.map(m.tree.path) == ["/r/keep/k"])
+}

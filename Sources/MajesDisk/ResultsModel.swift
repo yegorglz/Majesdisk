@@ -133,6 +133,17 @@ final class ResultsModel {
         resetPointer()
     }
 
+    /// Frees nodes left behind by deletes and rescans once they outnumber the live ones.
+    func compactIfNeeded() {
+        guard tree.garbageCount > tree.nodeCount - tree.garbageCount else { return }
+        let map = tree.compact()
+        history = NavigationHistory(start: map[center] ?? tree.root)
+        collector.remap(map)
+        expandedPackages = Set(expandedPackages.compactMap { map[$0] })
+        hovered = nil; rowHovered = nil; selected = nil; hoveredSmallerObjects = nil; expandedSmallerObjects = nil; sidebarAnchor = nil
+        treeVersion += 1
+    }
+
     /// After deletes or rescans, the map's center may no longer exist: move up to the nearest live folder.
     func leaveGoneCenter() {
         var live = center
