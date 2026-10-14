@@ -68,4 +68,4 @@ dragging items back out of the Collector (use × instead).
 ## Debug flags
 
 `--scan <path> [--admin]`, `--snapshot <png> --snapshot-delay <s>` (saves the app's own window),
-`--collect <path>` / `--delete-collected`, `--debug-no-elevation`. See `scripts/snapshot.sh`.
+`--collect <path>` / `--delete-collected`, `--debug-no-elevation` (the last three exist only in debug builds). See `scripts/snapshot.sh`.

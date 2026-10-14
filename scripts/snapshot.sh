@@ -1,4 +1,5 @@
 #!/bin/bash
+# Needs a debug build (scripts/build-app.sh debug) for --collect / --delete-collected / --debug-no-elevation.
 # Usage: scripts/snapshot.sh <out.png> <delay-seconds> [app args...]  — renders the app window to a PNG.
 set -euo pipefail
 cd "$(dirname "$0")/.."
