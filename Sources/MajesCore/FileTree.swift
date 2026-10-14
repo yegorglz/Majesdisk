@@ -86,6 +86,14 @@ public final class FileTree: @unchecked Sendable {
         return cur
     }
 
+    /// IDs in the tree's display order (size descending, then name).
+    public func sortedByOrder(_ ids: [NodeID]) -> [NodeID] {
+        ids.sorted { a, b in
+            if sizes[Int(a)] != sizes[Int(b)] { return sizes[Int(a)] > sizes[Int(b)] }
+            return names[Int(a)].localizedStandardCompare(names[Int(b)]) == .orderedAscending
+        }
+    }
+
     /// Deleted itself or inside a deleted folder (only the deleted folder carries the flag).
     public func isGone(_ id: NodeID) -> Bool {
         var cur: NodeID? = id
