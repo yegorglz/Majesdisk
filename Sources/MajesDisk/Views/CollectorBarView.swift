@@ -45,7 +45,7 @@ struct CollectorBarView: View {
         .frame(height: 56)
         .background(targeted ? Color.accentColor.opacity(0.2) : Color.clear)
         .dropDestination(for: URL.self) { urls, _ in
-            let ids = urls.compactMap(model.node(forDropped:))
+            let ids = urls.flatMap(model.nodes(forDropped:))
             ids.forEach(model.addToCollector)
             return !ids.isEmpty
         } isTargeted: { targeted = $0 }
@@ -90,13 +90,23 @@ struct CollectorListView: View {
 }
 
 extension ResultsModel {
-    /// Internal drags carry `majesdisk-node://<id>`; Finder drags carry file URLs inside the scanned tree.
-    func node(forDropped url: URL) -> NodeID? {
-        if url.scheme == "majesdisk-node", let id = url.host.flatMap(NodeID.init), id >= 0, Int(id) < tree.nodeCount { return id }
-        return url.isFileURL ? tree.node(atPath: url.path) : nil
+    /// Internal drags carry `majesdisk-node://<id>` (or `…://selection` for several rows);
+    /// Finder drags carry file URLs inside the scanned tree.
+    func nodes(forDropped url: URL) -> [NodeID] {
+        if url.scheme == "majesdisk-node" {
+            if url.host == "selection" { return tree.sortedByOrder(Array(selection)) }
+            if let id = url.host.flatMap(NodeID.init), id >= 0, Int(id) < tree.nodeCount { return [id] }
+            return []
+        }
+        return url.isFileURL ? tree.node(atPath: url.path).map { [$0] } ?? [] : []
     }
 
     static func dragURL(for id: NodeID) -> URL { URL(string: "majesdisk-node://\(id)")! }
+
+    /// Dragging one row of a multi-selection drags the whole selection.
+    static func dragURL(for id: NodeID, in model: ResultsModel) -> URL {
+        model.selection.count > 1 && model.selection.contains(id) ? URL(string: "majesdisk-node://selection")! : dragURL(for: id)
+    }
 }
 
 /// The 5-second fuse before a delete: a red ring that drains smoothly, seconds left in the middle.

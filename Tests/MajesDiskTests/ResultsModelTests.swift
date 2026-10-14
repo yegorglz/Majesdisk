@@ -43,11 +43,11 @@ import Testing
     var revealed: [URL] = []
     ResultsModel.revealInFinder = { revealed.append($0) }
     defer { ResultsModel.revealInFinder = ResultsModel.defaultReveal }
-    m.sidebarSelectionChanged(f, commandKey: true)
+    m.sidebarSelectionChanged([f], commandKey: true)
     #expect(revealed == [URL(fileURLWithPath: "/r/f")] && m.selected == nil)
-    m.sidebarSelectionChanged(f, commandKey: false)
+    m.sidebarSelectionChanged([f], commandKey: false)
     #expect(m.selected == f)
-    m.sidebarSelectionChanged(nil, commandKey: true)   // ⌘-click on the selected row deselects in List terms
+    m.sidebarSelectionChanged([], commandKey: true)    // ⌘-click on the selected row deselects in List terms
     #expect(revealed.count == 2 && m.selected == f)
 }
 
@@ -182,4 +182,19 @@ import Testing
     let m = ResultsModel(tree: b.finish(), volume: nil, asAdministrator: false)
     m.toggleCollector(dir)
     #expect(m.isCollected(kid) && m.isCollected(dir) && !m.isCollected(m.tree.node(atPath: "/r/z")!))
+}
+
+@MainActor @Test func collectingAMultiSelectionTakesEveryRow() {
+    let b = FileTreeBuilder(rootPath: "/r")
+    let ids = b.appendChildren(of: b.root, entries: (0..<8).map { DirEntry(name: "f\($0)", kind: .file, allocatedSize: UInt64(100 - $0)) })
+    let m = ResultsModel(tree: b.finish(), volume: nil, asAdministrator: false)
+    let range = Set(ids[1...5])
+    m.sidebarSelectionChanged(range, commandKey: false)             // shift-click range in the list
+    #expect(m.selection == range && m.selected != nil)
+    m.perform(.toggleCollector)
+    #expect(Set(m.collector.items) == range)
+    #expect(m.collector.totalSize(in: m.tree) == 99 + 98 + 97 + 96 + 95)
+    m.perform(.toggleCollector)                                     // again: all were collected, so all leave
+    #expect(m.collector.items.isEmpty)
+    #expect(Set(m.nodes(forDropped: ResultsModel.dragURL(for: ids[2], in: m))) == range)
 }

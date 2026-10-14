@@ -16,7 +16,13 @@ final class ResultsModel {
     var hoveredSmallerObjects: SmallerObjectsRef?
     /// Set when the user opens a "smaller objects" wedge: the sidebar lists all of them.
     var expandedSmallerObjects: SmallerObjectsRef?
-    var selected: NodeID?
+    /// Rows picked in the sidebar (shift-click ranges); `selected` is the one the keyboard and map follow.
+    var selection: Set<NodeID> = []
+    private var primarySelection: NodeID?
+    var selected: NodeID? {
+        get { primarySelection }
+        set { primarySelection = newValue; selection = newValue.map { [$0] } ?? [] }
+    }
     var expandedPackages: Set<NodeID> = []
     var treeVersion = 0
     var transition: TransitionDirection = .zoomIn
@@ -198,6 +204,10 @@ final class ResultsModel {
         case .enter:
             if let s = hoveredSmallerObjects { expandSmallerObjects(s) } else if let p = pointed { enter(p) }
         case .quickLook: QuickLookController.shared.toggle(model: self)
+        case .toggleCollector where selection.count > 1 && hovered == nil && hoveredSmallerObjects == nil:
+            // Several rows picked: collect them all, or release them all if they're all collected already.
+            if selection.allSatisfy(collector.contains) { selection.forEach { collector.remove($0) } }
+            else { tree.sortedByOrder(Array(selection)).forEach(addToCollector) }
         case .toggleCollector:
             if hoveredSmallerObjects != nil {
                 alert = AlertInfo(title: "Smaller objects can't be collected",
@@ -227,13 +237,16 @@ final class ResultsModel {
         Self.revealInFinder(URL(fileURLWithPath: tree.path(id)))
     }
 
-    /// The sidebar list's selection setter. ⌘-click reveals the row in Finder instead of selecting
-    /// (a ⌘-click on the selected row arrives as a deselect, so `id` is nil then).
-    func sidebarSelectionChanged(_ id: NodeID?, commandKey: Bool) {
+    /// The sidebar list's selection setter. ⌘-click reveals the clicked row in Finder instead of
+    /// changing the selection (DaisyDisk's ⌘-click); shift-click ranges select several rows.
+    func sidebarSelectionChanged(_ ids: Set<NodeID>, commandKey: Bool) {
         if commandKey {
-            if let target = id ?? selected { reveal(target) }
+            if let target = ids.symmetricDifference(selection).first ?? selected { reveal(target) }
             return
         }
-        selectFromSidebar(id)
+        let added = ids.subtracting(selection)
+        let primary = added.first ?? (selected.map { ids.contains($0) } == true ? selected : ids.first)
+        selectFromSidebar(primary)
+        selection = ids
     }
 }

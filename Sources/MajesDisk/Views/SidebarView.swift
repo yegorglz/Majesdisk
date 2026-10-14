@@ -20,7 +20,7 @@ struct SidebarView: View {
             .padding(12)
             Divider()
             ScrollViewReader { proxy in
-                List(selection: Binding(get: { model.selected }, set: { model.sidebarSelectionChanged($0, commandKey: NSEvent.modifierFlags.contains(.command)) })) {
+                List(selection: Binding(get: { model.selection }, set: { model.sidebarSelectionChanged($0, commandKey: NSEvent.modifierFlags.contains(.command)) })) {
                     ForEach(items, id: \.self) { id in
                         SidebarRow(model: model, id: id, parentSize: tree.size(folder))
                             .id(id)
@@ -32,7 +32,10 @@ struct SidebarView: View {
                 }
                 .listStyle(.plain)
                 .contextMenu(forSelectionType: NodeID.self) { ids in
-                    if let id = ids.first { NodeContextMenu(model: model, id: id) }
+                    if ids.count > 1 {
+                        Button("Move \(ids.count) Items to Collector") { model.tree.sortedByOrder(Array(ids)).forEach(model.addToCollector) }
+                        Button("Reveal in Finder") { ids.forEach(model.reveal) }
+                    } else if let id = ids.first { NodeContextMenu(model: model, id: id) }
                 } primaryAction: { ids in
                     // Double-click or Return: open a folder, preview a file.
                     guard let id = ids.first else { return }
@@ -42,7 +45,13 @@ struct SidebarView: View {
                 .onChange(of: model.selected) { _, sel in if let sel { proxy.scrollTo(sel) } }
             }
             Divider()
-            ItemInfoView(model: model, id: model.pointed ?? folder)
+            if model.selection.count > 1, model.hovered == nil {
+                let total = model.selection.reduce(UInt64(0)) { $0 + tree.size($1) }
+                Text("^[\(model.selection.count) item](inflect: true) selected · \(ByteFormat.string(total))")
+                    .font(.headline).frame(maxWidth: .infinity, alignment: .leading).padding(12)
+            } else {
+                ItemInfoView(model: model, id: model.pointed ?? folder)
+            }
         }
     }
 
@@ -92,7 +101,7 @@ struct SidebarRow: View {
         .onHover { inside in
             if inside { model.rowHovered = id } else if model.rowHovered == id { model.rowHovered = nil }
         }
-        .onDrag { NSItemProvider(object: ResultsModel.dragURL(for: id) as NSURL) }
+        .onDrag { NSItemProvider(object: ResultsModel.dragURL(for: id, in: model) as NSURL) }
     }
 }
 
