@@ -20,10 +20,15 @@ struct SidebarView: View {
             .padding(12)
             Divider()
             ScrollViewReader { proxy in
-                List(items, id: \.self, selection: Binding(get: { model.selected }, set: { model.sidebarSelectionChanged($0, commandKey: NSEvent.modifierFlags.contains(.command)) })) { id in
-                    SidebarRow(model: model, id: id, parentSize: tree.size(folder))
-                        .id(id)
-                        .listRowBackground(rowBackground(id))
+                List(selection: Binding(get: { model.selected }, set: { model.sidebarSelectionChanged($0, commandKey: NSEvent.modifierFlags.contains(.command)) })) {
+                    ForEach(items, id: \.self) { id in
+                        SidebarRow(model: model, id: id, parentSize: tree.size(folder))
+                            .id(id)
+                            .listRowBackground(rowBackground(id))
+                    }
+                    if let fold = model.sidebarFold {
+                        SmallerObjectsRow(model: model, folder: folder, start: fold)
+                    }
                 }
                 .listStyle(.plain)
                 .contextMenu(forSelectionType: NodeID.self) { ids in
@@ -78,6 +83,27 @@ struct SidebarRow: View {
             if inside { model.rowHovered = id } else if model.rowHovered == id { model.rowHovered = nil }
         }
         .onDrag { NSItemProvider(object: ResultsModel.dragURL(for: id) as NSURL) }
+    }
+}
+
+/// The folded tail of a folder's list; clicking opens the full list, as in the map.
+struct SmallerObjectsRow: View {
+    let model: ResultsModel
+    let folder: NodeID
+    let start: Int
+
+    var body: some View {
+        let tail = model.tree.children(folder).dropFirst(start)
+        Button { model.expandSmallerObjects(SmallerObjectsRef(parent: folder, start: start)) } label: {
+            HStack(spacing: 8) {
+                Circle().fill(Color(nsColor: model.color(for: folder).nsColor).opacity(0.35)).frame(width: 10, height: 10)
+                Text("\(tail.count.formatted()) smaller objects").foregroundStyle(.secondary)
+                Spacer(minLength: 4)
+                Text(ByteFormat.string(tail.reduce(0) { $0 + model.tree.size($1) })).font(.callout.monospacedDigit()).foregroundStyle(.secondary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 
