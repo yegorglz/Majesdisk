@@ -81,3 +81,21 @@ import Testing
     m.goForward(); m.goForward()
     #expect(!m.tree.isGone(m.center))
 }
+
+@MainActor @Test func halfFailedFolderDeleteRescansThatFolder() async throws {
+    guard getuid() != 0 else { return }
+    let d = FileManager.default.temporaryDirectory.appendingPathComponent("majes-pd-\(UUID().uuidString)").path
+    try FileManager.default.createDirectory(atPath: "\(d)/folder/ro", withIntermediateDirectories: true)
+    FileManager.default.createFile(atPath: "\(d)/folder/a", contents: Data(count: 50_000))
+    FileManager.default.createFile(atPath: "\(d)/folder/ro/locked", contents: Data(count: 9_000))
+    chmod("\(d)/folder/ro", 0o555)
+    defer { chmod("\(d)/folder/ro", 0o755); try? FileManager.default.removeItem(atPath: d) }
+    let m = ResultsModel(tree: DiskScanner(options: ScanOptions(rootPath: d)).run()!, volume: nil, asAdministrator: false)
+    m.addToCollector(m.tree.node(atPath: "\(d)/folder")!)
+    await m.deleteCollected()
+    for _ in 0..<50 where m.isRescanning { try await Task.sleep(for: .milliseconds(50)) }
+    #expect(!FileManager.default.fileExists(atPath: "\(d)/folder/a"))
+    #expect(m.tree.node(atPath: "\(d)/folder/a") == nil)                 // the map matches the disk again
+    #expect(m.tree.node(atPath: "\(d)/folder/ro/locked") != nil)
+    #expect(m.alert?.title == "Some items couldn't be deleted")
+}

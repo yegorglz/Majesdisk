@@ -83,9 +83,7 @@ extension ResultsModel {
             }
             if let f = o.failure, f != .notFound { failures.append(o) }
         }
-        var live = center
-        while tree.isGone(live), let p = tree.parent(live) { live = p }
-        if live != center { history.visit(live) }
+        leaveGoneCenter()
         treeVersion += 1
         AppModel.shared.refreshVolumes()
         guard !failures.isEmpty else { return }
@@ -99,6 +97,11 @@ extension ResultsModel {
             }
             return "\((o.path as NSString).lastPathComponent): \(why)"
         }
+        // A folder delete stops at the first file it can't remove, so part of it may be gone: re-measure it.
+        rescan(failures.compactMap { o in
+            guard case .protected = o.failure else { return ids[o.path].flatMap { tree.flags($0).contains(.directory) ? $0 : nil } }
+            return nil
+        })
         let denied = failures.filter { $0.failure == .permissionDenied }.map(\.path)
         alert = AlertInfo(title: "Some items couldn't be deleted", message: lines.joined(separator: "\n"), adminRetryPaths: denied)
     }
