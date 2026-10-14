@@ -89,7 +89,19 @@ final class ResultsModel {
     var sidebarItems: [NodeID] {
         let all = tree.children(sidebarFolder)
         if let s = expandedSmallerObjects, s.parent == sidebarFolder, s.start < all.count { return Array(all[s.start...]) }
-        return all
+        return Array(all.prefix(sidebarFold ?? all.count))
+    }
+
+    /// Where the sidebar folds the tail into one "N smaller objects" row: the map's 0.6° rule,
+    /// measured as if the folder were the center. Nil when nothing (or only one item) would fold.
+    var sidebarFold: Int? {
+        let folder = sidebarFolder
+        guard expandedSmallerObjects?.parent != folder, tree.size(folder) > 0 else { return nil }
+        let all = tree.children(folder)
+        let total = Double(tree.size(folder))
+        guard let i = all.firstIndex(where: { 2 * .pi * Double(tree.size($0)) / total < SunburstConfig().minSegmentAngle }),
+              all.count - i > 1 else { return nil }
+        return i
     }
 
     // MARK: Navigation

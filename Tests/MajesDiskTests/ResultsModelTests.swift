@@ -99,3 +99,12 @@ import Testing
     #expect(m.tree.node(atPath: "\(d)/folder/ro/locked") != nil)
     #expect(m.alert?.title == "Some items couldn't be deleted")
 }
+
+@MainActor @Test func sidebarFoldsTinyItemsLikeTheMap() {
+    let tree = smallTree()
+    let m = ResultsModel(tree: tree, volume: nil, asAdministrator: false)
+    #expect(m.sidebarItems.map(tree.name) == ["big"])
+    #expect(m.sidebarFold == 1)
+    m.expandSmallerObjects(SmallerObjectsRef(parent: tree.root, start: 1))
+    #expect(m.sidebarItems.count == 300 && m.sidebarFold == nil)
+}
