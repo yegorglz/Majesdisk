@@ -16,7 +16,7 @@ A free, open-source, fully local disk analyzer for macOS, in the spirit of Daisy
 
 </div>
 
-## Why MajesDisk
+## Why tho??
 
 - **Fast.** Reads folders in bulk with `getattrlistbulk` on parallel threads. About 1.3 million files take ~40 seconds on an SSD, and 200k files in a couple of seconds.
 - **Honest numbers.** It counts the space files really take on disk. Hard links and APFS clones are counted once, and space the scan can't see is shown as *Hidden space*, split into purgeable space, other volumes and the rest.
