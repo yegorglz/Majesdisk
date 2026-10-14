@@ -15,3 +15,9 @@ import Testing
     #expect(ScanStore(directory: dir).saved().isEmpty)
     #expect(try ScanStore(directory: dir).load("/r") == nil)
 }
+
+@Test func savedScansRememberTheirTotal() throws {
+    let store = ScanStore(directory: URL(fileURLWithPath: makeTempDir()))
+    try store.save(sampleTree())
+    #expect(store.savedSize("/r") == 400)
+}

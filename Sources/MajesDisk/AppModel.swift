@@ -86,7 +86,14 @@ final class AppModel {
         return fullDiskAccess != true && !warnedAboutAccess && (path == "/" || path == home || home.hasPrefix(path + "/"))
     }
 
-    func startScan(path: String, asAdministrator: Bool, warnAboutAccess: Bool = true) {
+    /// One spelling per folder (/tmp and /private/tmp are the same place), so scans, stars and saved
+    /// results don't split into duplicates.
+    static func canonical(_ path: String) -> String {
+        realpath(path, nil).map { p in defer { free(p) }; return String(cString: p) } ?? path
+    }
+
+    func startScan(path rawPath: String, asAdministrator: Bool, warnAboutAccess: Bool = true) {
+        let path = Self.canonical(rawPath)
         if warnAboutAccess, needsAccessWarning(for: path) {
             warnedAboutAccess = true
             let alert = NSAlert()
@@ -105,7 +112,7 @@ final class AppModel {
         leaveResults()
         screen = .overview
         if volume(forPath: path) == nil, !recentFolders.contains(path) { recentFolders.insert(path, at: 0) }
-        let expected = cachedResults[path].map { $0.tree.size($0.tree.root) }
+        let expected = cachedResults[path].map { $0.tree.size($0.tree.root) } ?? store.savedSize(path)
         let session = ScanSession(rootPath: path, asAdministrator: asAdministrator, volume: volume(forPath: path), store: store, expectedBytes: expected)
         session.onFinish = { [weak self] state in
             guard let self else { return }
@@ -150,14 +157,18 @@ final class AppModel {
     }
 
     func present(_ results: ResultsModel) {
-        cachedResults[results.tree.rootPath] = results
+        cachedResults[Self.canonical(results.tree.rootPath)] = results
         screen = .results(results)
     }
 
-    func hasResults(_ path: String) -> Bool { cachedResults[path] != nil || savedScans[path] != nil }
+    func hasResults(_ rawPath: String) -> Bool {
+        let path = Self.canonical(rawPath)
+        return cachedResults[path] != nil || savedScans[path] != nil
+    }
 
     /// Shows a scan from memory, or reads the saved one from disk (seconds for a whole disk).
-    func showResults(for path: String) {
+    func showResults(for rawPath: String) {
+        let path = Self.canonical(rawPath)
         leaveResults()
         if let r = cachedResults[path] { screen = .results(r); return }
         guard let date = savedScans[path] else { return }
@@ -190,8 +201,9 @@ final class AppModel {
     }
 
     /// Frees a scan's memory; its row goes back to "Scan".
-    func forget(path: String) {
-        if case .results(let r) = screen, r.tree.rootPath == path { showOverview() }
+    func forget(path rawPath: String) {
+        let path = Self.canonical(rawPath)
+        if case .results(let r) = screen, Self.canonical(r.tree.rootPath) == path { showOverview() }
         cachedResults[path]?.deletion.cancel()
         cachedResults[path]?.stopWatching()
         cachedResults[path] = nil

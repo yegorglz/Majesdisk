@@ -246,7 +246,7 @@ final class ResultsModel {
                     tree.insertFlags(.vanished, into: id)
                     if let parent = tree.parent(id) { markChanged(parent) }
                 } else if tree.flags(id).contains(.directory) {
-                    markChanged(id)
+                    continue  // the folder itself was touched; its children's events say what changed
                 } else if let parent = tree.parent(id) {
                     markChanged(parent)
                 }

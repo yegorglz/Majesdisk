@@ -1,4 +1,5 @@
 import AppKit
+import CoreServices
 import Testing
 @testable import MajesCore
 @testable import MajesDisk
@@ -243,4 +244,15 @@ import Testing
     m.rescan(m.staleFolders)
     for _ in 0..<50 where m.isRescanning { try await Task.sleep(for: .milliseconds(50)) }
     #expect(m.tree.node(atPath: "\(d)/sub/new.bin") != nil && m.staleFolders.isEmpty)
+}
+
+@MainActor @Test func onlyRealContentChangesCount() {
+    #expect(!FolderWatcher.isContentChange(FSEventStreamEventFlags(kFSEventStreamEventFlagHistoryDone)))
+    #expect(!FolderWatcher.isContentChange(FSEventStreamEventFlags(kFSEventStreamEventFlagRootChanged)))
+    #expect(!FolderWatcher.isContentChange(FSEventStreamEventFlags(kFSEventStreamEventFlagItemInodeMetaMod | kFSEventStreamEventFlagItemIsDir)))
+    #expect(FolderWatcher.isContentChange(FSEventStreamEventFlags(kFSEventStreamEventFlagItemRemoved | kFSEventStreamEventFlagItemIsFile)))
+    // A folder event on its own (its listing was touched) isn't a change; its children's events are.
+    let m = ResultsModel(tree: smallTree(), volume: nil, asAdministrator: false)
+    m.handleChanges(["/r"])
+    #expect(m.staleFolders.isEmpty)
 }
