@@ -6,7 +6,7 @@ struct BreadcrumbView: View {
     let model: ResultsModel
 
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 4) {
             ForEach(Array(chain.enumerated()), id: \.element) { i, id in
                 if i > 0 { Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.secondary) }
                 Button(model.displayName(id)) { model.navigate(to: id) }
@@ -15,7 +15,10 @@ struct BreadcrumbView: View {
                     .lineLimit(1)
             }
         }
-        .frame(maxWidth: 520)
+        // The toolbar draws a capsule behind this item; keep the text off its rounded ends.
+        .padding(.horizontal, 14)
+        .padding(.vertical, 3)
+        .frame(maxWidth: 560)
     }
 
     var chain: [NodeID] {
