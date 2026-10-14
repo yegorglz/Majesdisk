@@ -39,3 +39,15 @@ import Testing
     try await Task.sleep(for: .seconds(6))
     #expect(FileManager.default.fileExists(atPath: "\(d)/a/x"))
 }
+
+@MainActor @Test func warnsAboutMissingAccessOnlyForScansThatHitProtectedFolders() {
+    let app = AppModel()
+    app.fullDiskAccess = false
+    #expect(app.needsAccessWarning(for: "/"))
+    #expect(app.needsAccessWarning(for: NSHomeDirectory()))
+    #expect(app.needsAccessWarning(for: (NSHomeDirectory() as NSString).deletingLastPathComponent))
+    #expect(!app.needsAccessWarning(for: "/tmp/x"))
+    #expect(!app.needsAccessWarning(for: NSHomeDirectory() + "x"))
+    app.fullDiskAccess = true
+    #expect(!app.needsAccessWarning(for: "/"))
+}
