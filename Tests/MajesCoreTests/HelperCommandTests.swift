@@ -40,3 +40,15 @@ import Testing
     #expect(results.first { $0.path == "/Users/me" }?.error == "protected")
     #expect(results.first { $0.path == "\(d)/f" }?.error == nil)
 }
+
+@Test func helperNeverWritesThroughAPlantedSymlink() throws {
+    let d = makeTempDir(); let w = makeTempDir()
+    write("\(w)/precious", bytes: 3); chmod("\(w)/precious", 0o600)
+    try FileManager.default.createSymbolicLink(atPath: "\(w)/o", withDestinationPath: "\(w)/precious")
+    try FileManager.default.createSymbolicLink(atPath: "\(w)/p", withDestinationPath: "\(w)/precious")
+    #expect(HelperCommand.run(arguments: ["scan", "--root", d, "--out", "\(w)/o", "--progress", "\(w)/p", "--cancel", "\(w)/c"]) == 0)
+    let attrs = try FileManager.default.attributesOfItem(atPath: "\(w)/precious")
+    #expect((attrs[.posixPermissions] as? Int) == 0o600 && (attrs[.size] as? Int) == 3)
+    #expect((try FileManager.default.attributesOfItem(atPath: "\(w)/o"))[.type] as? FileAttributeType == .typeRegular)
+    #expect((try FileManager.default.attributesOfItem(atPath: "\(w)/o"))[.posixPermissions] as? Int == 0o644)
+}
