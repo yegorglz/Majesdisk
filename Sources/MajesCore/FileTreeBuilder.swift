@@ -23,11 +23,12 @@ public final class FileTreeBuilder {
             if e.isMountPoint { flags.insert(.mountPoint) }
             if e.isDataless { flags.insert(.dataless) }
             // Hard links share a file ID and full clones share a clone ID: count the data once.
-            if e.kind != .directory, e.linkCount > 1 || e.cloneRefCount > 1 {
-                let key = e.cloneID != 0 ? e.cloneID : e.fileID
-                if !seenSharedData.insert(key).inserted { size = 0; flags.insert(.secondaryLink) }
-            }
-            return tree.addNode(name: e.name, parent: parent, size: size, flags: flags)
+            let shared = e.kind != .directory && (e.linkCount > 1 || e.cloneRefCount > 1)
+            let key = e.cloneID != 0 ? e.cloneID : e.fileID
+            if shared, !seenSharedData.insert(key).inserted { size = 0; flags.insert(.secondaryLink) }
+            let id = tree.addNode(name: e.name, parent: parent, size: size, flags: flags)
+            if shared { tree.addLinkKey(key, to: id) }
+            return id
         }
     }
 

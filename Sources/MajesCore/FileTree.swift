@@ -11,6 +11,9 @@ public final class FileTree: @unchecked Sendable {
     var flagList: [NodeFlags] = []
     var childIDs: [[NodeID]] = []
     var virtualKinds: [NodeID: VirtualKind] = [:]
+    /// Hard links and full clones: nodes sharing one data stream, keyed by clone/file ID.
+    var linkKeys: [NodeID: UInt64] = [:]
+    var linkGroups: [UInt64: [NodeID]] = [:]
 
     public var root: NodeID { 0 }
     public var nodeCount: Int { names.count }
@@ -22,10 +25,11 @@ public final class FileTree: @unchecked Sendable {
 
     /// Rebuilds child lists from parent pointers (used by TreeCodec).
     init(rootPath: String, names: [String], parents: [NodeID], sizes: [UInt64], itemCounts: [Int32],
-         flags: [NodeFlags], virtualKinds: [NodeID: VirtualKind]) {
+         flags: [NodeFlags], virtualKinds: [NodeID: VirtualKind], linkKeys: [NodeID: UInt64] = [:]) {
         self.rootPath = rootPath
         self.names = names; self.parents = parents; self.sizes = sizes; self.itemCounts = itemCounts
         self.flagList = flags; self.virtualKinds = virtualKinds
+        for (id, key) in linkKeys.sorted(by: { $0.key < $1.key }) { addLinkKey(key, to: id) }
         childIDs = Array(repeating: [], count: names.count)
         for id in 1..<max(1, names.count) where parents[id] >= 0 { childIDs[Int(parents[id])].append(NodeID(id)) }
         sortAllChildren()
@@ -37,6 +41,11 @@ public final class FileTree: @unchecked Sendable {
         itemCounts.append(0); flagList.append(flags); childIDs.append([])
         if parent >= 0 { childIDs[Int(parent)].append(id) }
         return id
+    }
+
+    func addLinkKey(_ key: UInt64, to id: NodeID) {
+        linkKeys[id] = key
+        linkGroups[key, default: []].append(id)
     }
 
     // MARK: Queries
@@ -93,6 +102,20 @@ public final class FileTree: @unchecked Sendable {
         guard id != root, !flagList[Int(id)].contains(.deleted) else { return }
         flagList[Int(id)].insert(.deleted)
         adjustAncestors(of: id, sizeDelta: -Int64(sizes[Int(id)]), itemDelta: -(itemCounts[Int(id)] + 1))
+        if !linkKeys.isEmpty { handOverLinkedData(deletedSubtree: id) }
+    }
+
+    /// The data of a deleted counted link still exists if another link survives: that one now carries the size.
+    private func handOverLinkedData(deletedSubtree root: NodeID) {
+        var stack = [root]
+        while let n = stack.popLast() {
+            stack += childIDs[Int(n)].filter { !flagList[Int($0)].contains(.deleted) }
+            guard childIDs[Int(n)].isEmpty, !flagList[Int(n)].contains(.secondaryLink), sizes[Int(n)] > 0,
+                  let key = linkKeys[n], let heir = linkGroups[key]?.first(where: { flagList[Int($0)].contains(.secondaryLink) && !isGone($0) }) else { continue }
+            flagList[Int(heir)].remove(.secondaryLink)
+            sizes[Int(heir)] = sizes[Int(n)]
+            adjustAncestors(of: heir, sizeDelta: Int64(sizes[Int(n)]), itemDelta: 0)
+        }
     }
 
     @discardableResult
@@ -121,8 +144,10 @@ public final class FileTree: @unchecked Sendable {
             itemCounts[Int(newID)] = fresh.itemCounts[f]
             if let k = fresh.virtualKinds[fid] { virtualKinds[newID] = k }
             map[fid] = newID
-            sortChildren(newID)
         }
+        // shortcut: links between the rescanned folder and the rest of the tree may count twice until a full rescan.
+        for (fid, key) in fresh.linkKeys { if let newID = map[fid] { addLinkKey(key, to: newID) } }
+        for f in 1..<max(1, fresh.nodeCount) { sortChildren(map[NodeID(f)]!) }
         sortChildren(id)
         let sizeDelta = Int64(fresh.size(fresh.root)) - Int64(sizes[Int(id)])
         let itemDelta = fresh.itemCounts[0] - itemCounts[Int(id)]

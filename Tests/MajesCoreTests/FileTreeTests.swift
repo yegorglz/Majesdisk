@@ -72,3 +72,23 @@ func sampleTree() -> FileTree {
     #expect(t.itemCount(t.root) == 5)
     #expect(t.children(t.root).map(t.name) == ["f", "a", "e"])
 }
+
+/// a (counted) in A, its hard link h (0 bytes) in B
+private func linkedTree() -> FileTree {
+    let b = FileTreeBuilder(rootPath: "/r")
+    let dirs = b.appendChildren(of: b.root, entries: [DirEntry(name: "A", kind: .directory), DirEntry(name: "B", kind: .directory)])
+    b.appendChildren(of: dirs[0], entries: [DirEntry(name: "a", kind: .file, allocatedSize: 1000, fileID: 7, linkCount: 2, cloneID: 7, cloneRefCount: 2)])
+    b.appendChildren(of: dirs[1], entries: [DirEntry(name: "h", kind: .file, allocatedSize: 1000, fileID: 7, linkCount: 2, cloneID: 7, cloneRefCount: 2)])
+    return b.finish()
+}
+
+@Test func deletingTheCountedLinkMovesItsSizeToTheSurvivor() throws {
+    for t in [linkedTree(), try TreeCodec.decode(TreeCodec.encode(linkedTree()))] {
+        t.markDeleted(t.node(atPath: "/r/A")!)
+        let h = t.node(atPath: "/r/B/h")!
+        #expect(t.size(t.root) == 1000)            // the data still exists under h
+        #expect(t.size(h) == 1000 && !t.flags(h).contains(.secondaryLink))
+        t.markDeleted(h)
+        #expect(t.size(t.root) == 0)
+    }
+}
