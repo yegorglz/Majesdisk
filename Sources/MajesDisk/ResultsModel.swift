@@ -121,6 +121,13 @@ final class ResultsModel {
         resetPointer()
     }
 
+    /// After deletes or rescans, the map's center may no longer exist: move up to the nearest live folder.
+    func leaveGoneCenter() {
+        var live = center
+        while tree.isGone(live), let p = tree.parent(live) { live = p }
+        if live != center { history.visit(live) }
+    }
+
     func navigate(to id: NodeID) {
         let before = center
         guard id != before else { return }
