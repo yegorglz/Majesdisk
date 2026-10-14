@@ -25,6 +25,11 @@ final class SunburstNSView: NSView {
     var dragStarted = false
 
     override var isFlipped: Bool { true }
+    private var baseLayer: CGLayer?
+    private var baseKey: [Int] = []
+
+    override func setFrameSize(_ newSize: NSSize) { super.setFrameSize(newSize); baseLayer = nil }
+    override func viewDidChangeEffectiveAppearance() { super.viewDidChangeEffectiveAppearance(); baseLayer = nil }
     override var acceptsFirstResponder: Bool { true }
 
     override func viewDidMoveToWindow() {
@@ -109,7 +114,15 @@ final class SunburstNSView: NSView {
                 draw(segments, in: ctx, model: model, scale: f.incomingScale, alpha: f.incomingAlpha, highlight: nil)
             }
         } else {
-            draw(segments, in: ctx, model: model, scale: 1, alpha: 1, highlight: hoveredIndex)
+            // Hovering redraws only one wedge: the rest comes from a cached layer.
+            let key = [Int(model.center), model.treeVersion, model.collector.items.hashValue]
+            if baseLayer == nil || key != baseKey, let layer = CGLayer(ctx, size: bounds.size, auxiliaryInfo: nil), let lctx = layer.context {
+                draw(segments, in: lctx, model: model, scale: 1, alpha: 1, highlight: nil)
+                baseLayer = layer
+                baseKey = key
+            }
+            if let baseLayer { ctx.draw(baseLayer, at: .zero) }
+            if let i = hoveredIndex { draw([segments[i]], in: ctx, model: model, scale: 1, alpha: 1, highlight: 0) }
         }
         drawCenter(model: model)
     }

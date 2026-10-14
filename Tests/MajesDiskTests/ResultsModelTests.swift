@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import Testing
 @testable import MajesCore
 @testable import MajesDisk
@@ -135,4 +135,31 @@ import Testing
     m.hovered = tree.node(atPath: "/r/big")
     v.refresh()
     #expect(v.accessibilityLabel()?.contains("big") == true)
+}
+
+/// Renders the map offscreen: dir A (75%, colored) spans 12→9 o'clock clockwise; file B (25%, grey) the
+/// upper-left quarter. A vertically flipped cached layer would put A's color there.
+@MainActor @Test func cachedMapDrawsTheRightWayUp() throws {
+    let b = FileTreeBuilder(rootPath: "/r")
+    let ids = b.appendChildren(of: b.root, entries: [DirEntry(name: "A", kind: .directory), DirEntry(name: "B", kind: .file, allocatedSize: 25)])
+    b.appendChildren(of: ids[0], entries: [DirEntry(name: "a", kind: .file, allocatedSize: 75)])
+    let m = ResultsModel(tree: b.finish(), volume: nil, asAdministrator: false)
+    let v = SunburstNSView(frame: NSRect(x: 0, y: 0, width: 400, height: 400))
+    v.model = m
+    v.refresh()
+    let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 400, pixelsHigh: 400, bitsPerSample: 8, samplesPerPixel: 4,
+                               hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+    let ctx = NSGraphicsContext(bitmapImageRep: rep)!
+    ctx.cgContext.translateBy(x: 0, y: 400); ctx.cgContext.scaleBy(x: 1, y: -1)   // what AppKit does for a flipped view
+    NSGraphicsContext.saveGraphicsState(); NSGraphicsContext.current = ctx
+    v.draw(v.bounds)
+    NSGraphicsContext.restoreGraphicsState()
+    let ring = v.config.radii(depth: 1, outerRadius: v.outerRadius)
+    let r = (ring.inner + ring.outer) / 2
+    func pixel(_ angle: Double) -> NSColor {   // y-down view coordinates = bitmap rows from the top
+        rep.colorAt(x: Int(200 + r * sin(angle)), y: Int(200 - r * cos(angle)))!
+    }
+    let upperLeft = pixel(1.75 * .pi), lowerLeft = pixel(1.25 * .pi)
+    #expect(abs(upperLeft.redComponent - upperLeft.blueComponent) < 0.02 && upperLeft.redComponent > 0.3)  // grey file B
+    #expect(abs(lowerLeft.redComponent - lowerLeft.blueComponent) > 0.1)                                    // colored folder A
 }
