@@ -40,6 +40,11 @@ final class ResultsModel {
     var largestKind: FileKind?
     var largestOlderThanMonths: Int?
     @ObservationIgnored private var largestCache: (key: [Int], items: [NodeID])?
+    /// Folders changed outside the app since the scan (outermost first come from `staleFolders`).
+    var changedFolders: Set<NodeID> = []
+    @ObservationIgnored private var watcher: FolderWatcher?
+    /// Paths this app deleted: their file-system events aren't outside changes.
+    @ObservationIgnored var ownDeletions: Set<String> = []
     @ObservationIgnored private var suggestionsCache: (version: Int, items: [CleanupSuggestion])?
 
     /// Known regenerable space hogs in this scan (whole scan, not just the map center).
@@ -215,6 +220,57 @@ final class ResultsModel {
         resetPointer()
     }
 
+    // MARK: Changes made outside the app
+
+    func startWatching(since: FSEventStreamEventId) {
+        // realpath, not resolvingSymlinksInPath: the latter strips /private, FSEvents doesn't.
+        let realRoot = realpath(tree.rootPath, nil).map { p in defer { free(p) }; return String(cString: p) } ?? tree.rootPath
+        let root = tree.rootPath
+        watcher = FolderWatcher(path: root, since: since) { [weak self] paths in
+            // Events use the real path (/private/tmp); the tree may use the link (/tmp).
+            self?.handleChanges(paths.map { $0.hasPrefix(realRoot) && realRoot != root ? root + $0.dropFirst(realRoot.count) : $0 })
+        }
+    }
+
+    func stopWatching() { watcher?.stop(); watcher = nil }
+
+    /// Removed items get struck out; their folder (or the nearest scanned folder of a new item) is marked changed.
+    func handleChanges(_ paths: [String]) {
+        var touched = false
+        for p in Set(paths.map { $0.hasSuffix("/") && $0.count > 1 ? String($0.dropLast()) : $0 }) {
+            if ownDeletions.contains(where: { p == $0 || p.hasPrefix($0 + "/") }) { continue }
+            var st = stat()
+            let exists = lstat(p, &st) == 0
+            if let id = tree.node(atPath: p) {
+                if !exists, id != tree.root {
+                    tree.insertFlags(.vanished, into: id)
+                    if let parent = tree.parent(id) { markChanged(parent) }
+                } else if tree.flags(id).contains(.directory) {
+                    markChanged(id)
+                } else if let parent = tree.parent(id) {
+                    markChanged(parent)
+                }
+            } else {
+                var folder = (p as NSString).deletingLastPathComponent
+                while tree.node(atPath: folder) == nil, folder.count > tree.rootPath.count { folder = (folder as NSString).deletingLastPathComponent }
+                if let id = tree.node(atPath: folder) { markChanged(id) }
+            }
+            touched = true
+        }
+        if touched { treeVersion += 1 }
+    }
+
+    private func markChanged(_ id: NodeID) {
+        tree.insertFlags(.changed, into: id)
+        changedFolders.insert(id)
+    }
+
+    /// Changed folders worth rescanning: still present, and not inside another changed folder.
+    var staleFolders: [NodeID] {
+        let live = changedFolders.filter { !tree.isGone($0) }
+        return tree.sortedByOrder(live.filter { id in !live.contains { $0 != id && tree.isAncestor($0, of: id) } })
+    }
+
     /// Frees nodes left behind by deletes and rescans once they outnumber the live ones.
     func compactIfNeeded() {
         // A running rescan or delete holds node IDs; each compacts when it finishes.
@@ -222,6 +278,7 @@ final class ResultsModel {
         let map = tree.compact()
         history = NavigationHistory(start: map[center] ?? tree.root)
         collector.remap(map)
+        changedFolders = Set(changedFolders.compactMap { map[$0] })
         expandedPackages = Set(expandedPackages.compactMap { map[$0] })
         hovered = nil; rowHovered = nil; selected = nil; hoveredSmallerObjects = nil; expandedSmallerObjects = nil; sidebarAnchor = nil
         treeVersion += 1

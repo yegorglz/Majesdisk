@@ -109,6 +109,8 @@ public final class FileTree: @unchecked Sendable {
 
     // MARK: Mutation (main thread)
 
+    public func insertFlags(_ f: NodeFlags, into id: NodeID) { flagList[Int(id)].formUnion(f) }
+
     public func markDeleted(_ id: NodeID) {
         guard id != root, !flagList[Int(id)].contains(.deleted) else { return }
         flagList[Int(id)].insert(.deleted)
@@ -165,7 +167,7 @@ public final class FileTree: @unchecked Sendable {
         let sizeDelta = Int64(fresh.size(fresh.root)) - Int64(sizes[Int(id)])
         let itemDelta = fresh.itemCounts[0] - itemCounts[Int(id)]
         sizes[Int(id)] = fresh.size(fresh.root); itemCounts[Int(id)] = fresh.itemCounts[0]
-        flagList[Int(id)].remove(.restricted)
+        flagList[Int(id)].subtract([.restricted, .changed, .vanished])
         if fresh.flagList[0].contains(.restricted) { flagList[Int(id)].insert(.restricted) }
         adjustAncestors(of: id, sizeDelta: sizeDelta, itemDelta: itemDelta)
     }

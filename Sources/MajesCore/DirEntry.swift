@@ -34,6 +34,10 @@ public struct NodeFlags: OptionSet, Sendable, Hashable {
     public static let virtual = NodeFlags(rawValue: 1 << 6)
     public static let mountPoint = NodeFlags(rawValue: 1 << 7)
     public static let dataless = NodeFlags(rawValue: 1 << 8)
+    /// Removed outside the app since the scan.
+    public static let vanished = NodeFlags(rawValue: 1 << 9)
+    /// A folder whose contents changed outside the app since the scan.
+    public static let changed = NodeFlags(rawValue: 1 << 10)
 }
 
 public enum VirtualKind: UInt8, Sendable { case hiddenSpace, purgeable, otherVolumes, stillHidden }

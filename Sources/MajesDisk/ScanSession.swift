@@ -1,3 +1,4 @@
+import CoreServices
 import Foundation
 import MajesCore
 import Observation
@@ -24,6 +25,8 @@ final class ScanSession {
 
     let store: ScanStore?
     let startedAt = Date()
+    /// File-system event ID when the scan began: watching from here also catches changes made mid-scan.
+    let startEventID = FSEventsGetCurrentEventId()
     /// What the scan should add up to: the disk's used space, or the last scan of the folder. Nil if unknown.
     let expectedBytes: UInt64?
 

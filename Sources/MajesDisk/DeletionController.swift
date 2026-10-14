@@ -88,6 +88,7 @@ extension ResultsModel {
         for o in outcomes {
             guard let id = ids[o.path] else { continue }
             if o.failure == nil || o.failure == .notFound {
+                ownDeletions.insert(o.path)
                 tree.markDeleted(id)
                 collector.remove(id)
             }

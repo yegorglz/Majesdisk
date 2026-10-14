@@ -46,6 +46,13 @@ struct ResultsView: View {
             }
             ToolbarItem(placement: .principal) { BreadcrumbView(model: results) }
             ToolbarItemGroup(placement: .primaryAction) {
+                if !results.staleFolders.isEmpty {
+                    Button { results.rescanChanged() } label: {
+                        Label("Rescan Changed (\(results.staleFolders.count))", systemImage: "exclamationmark.arrow.circlepath")
+                    }
+                    .labelStyle(.titleAndIcon)
+                    .help("Some folders changed outside MajesDisk since the scan. Re-measure just those.")
+                }
                 Button { results.rescanFolder(results.center) } label: { Label("Rescan", systemImage: "arrow.clockwise") }
                     .help("Rescan this folder (⌘R)")
                 Button { app.showOverview() } label: { Label("Disks", systemImage: "internaldrive") }
