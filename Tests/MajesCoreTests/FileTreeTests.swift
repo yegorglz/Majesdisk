@@ -92,3 +92,21 @@ private func linkedTree() -> FileTree {
         #expect(t.size(t.root) == 0)
     }
 }
+
+@Test func compactDropsDeadNodesAndKeepsTheLiveTree() {
+    let t = sampleTree()
+    let a = t.node(atPath: "/r/a")!
+    for i in 0..<3 {
+        let b = FileTreeBuilder(rootPath: "/r/a")
+        b.appendChildren(of: b.root, entries: (0..<10).map { DirEntry(name: "x\(i)-\($0)", kind: .file, allocatedSize: 10) })
+        t.replaceSubtree(of: a, with: b.finish())
+    }
+    t.markDeleted(t.node(atPath: "/r/f")!)
+    #expect(t.garbageCount == 1 + 10 + 10 + 1)           // g, two replaced sets, f
+    let before = t.children(t.root).map(t.path)
+    let map = t.compact()
+    #expect(t.nodeCount == 1 + 2 + 10 && t.garbageCount == 0)
+    #expect(t.children(t.root).map(t.path) == before)
+    #expect(t.size(t.root) == 100 && t.size(map[a]!) == 100)
+    #expect(t.node(atPath: "/r/a/x2-3") != nil && t.node(atPath: "/r/a/x0-0") == nil)
+}

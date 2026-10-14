@@ -15,6 +15,9 @@ public final class FileTree: @unchecked Sendable {
     var linkKeys: [NodeID: UInt64] = [:]
     var linkGroups: [UInt64: [NodeID]] = [:]
 
+    /// Nodes no longer reachable (deleted or replaced by a rescan); `compact()` frees them.
+    public private(set) var garbageCount = 0
+
     public var root: NodeID { 0 }
     public var nodeCount: Int { names.count }
 
@@ -101,6 +104,7 @@ public final class FileTree: @unchecked Sendable {
     public func markDeleted(_ id: NodeID) {
         guard id != root, !flagList[Int(id)].contains(.deleted) else { return }
         flagList[Int(id)].insert(.deleted)
+        garbageCount += Int(itemCounts[Int(id)]) + 1
         adjustAncestors(of: id, sizeDelta: -Int64(sizes[Int(id)]), itemDelta: -(itemCounts[Int(id)] + 1))
         if !linkKeys.isEmpty { handOverLinkedData(deletedSubtree: id) }
     }
@@ -137,6 +141,7 @@ public final class FileTree: @unchecked Sendable {
     public func replaceSubtree(of id: NodeID, with fresh: FileTree) {
         for c in childIDs[Int(id)] { flagList[Int(c)].insert(.deleted) }
         childIDs[Int(id)] = []
+        garbageCount += Int(itemCounts[Int(id)])
         var map: [NodeID: NodeID] = [fresh.root: id]
         for f in 1..<max(1, fresh.nodeCount) {
             let fid = NodeID(f)
@@ -155,6 +160,32 @@ public final class FileTree: @unchecked Sendable {
         flagList[Int(id)].remove(.restricted)
         if fresh.flagList[0].contains(.restricted) { flagList[Int(id)].insert(.restricted) }
         adjustAncestors(of: id, sizeDelta: sizeDelta, itemDelta: itemDelta)
+    }
+
+    /// Rebuilds the arrays with only live nodes (parents before children, child order kept).
+    /// Returns old → new IDs so callers can remap what they hold.
+    @discardableResult
+    public func compact() -> [NodeID: NodeID] {
+        var map: [NodeID: NodeID] = [:]
+        var order: [NodeID] = []
+        var queue = [root]
+        while !queue.isEmpty {
+            let level = queue; queue = []
+            for n in level { map[n] = NodeID(order.count); order.append(n); queue += children(n) }
+        }
+        let newChildren = order.map { children($0).map { map[$0]! } }  // before flagList is rewritten
+        names = order.map { names[Int($0)] }
+        parents = order.map { parents[Int($0)] < 0 ? -1 : map[parents[Int($0)]]! }
+        sizes = order.map { sizes[Int($0)] }
+        itemCounts = order.map { itemCounts[Int($0)] }
+        flagList = order.map { flagList[Int($0)] }
+        childIDs = newChildren
+        virtualKinds = Dictionary(uniqueKeysWithValues: virtualKinds.compactMap { k, v in map[k].map { ($0, v) } })
+        let oldKeys = linkKeys
+        linkKeys = [:]; linkGroups = [:]
+        for (k, key) in oldKeys.sorted(by: { $0.key < $1.key }) { if let n = map[k] { addLinkKey(key, to: n) } }
+        garbageCount = 0
+        return map
     }
 
     func adjustAncestors(of id: NodeID, sizeDelta: Int64, itemDelta: Int32) {

@@ -86,7 +86,7 @@ extension ResultsModel {
         leaveGoneCenter()
         treeVersion += 1
         AppModel.shared.refreshVolumes()
-        guard !failures.isEmpty else { return }
+        guard !failures.isEmpty else { compactIfNeeded(); return }  // with failures, the rescan below compacts when done
         let lines = failures.map { o -> String in
             let why: String
             switch o.failure {
