@@ -1,4 +1,5 @@
 import AppKit
+import CoreServices
 import MajesCore
 import Observation
 
@@ -113,6 +114,8 @@ final class AppModel {
             case .finished(let tree, let previous):
                 self.savedScans[path] = Date()
                 let results = ResultsModel(tree: tree, volume: session.volume, asAdministrator: asAdministrator, previous: previous)
+                self.cachedResults[path]?.stopWatching()
+                results.startWatching(since: session.startEventID)
                 self.cachedResults[path] = results
                 // Open it if the user is still on the overview; otherwise its row now says "Show".
                 if case .overview = self.screen { self.present(results) }
@@ -164,7 +167,9 @@ final class AppModel {
             let tree = await Task.detached(priority: .userInitiated) { try? store.load(path) }.value
             loadingPath = nil
             guard let tree = tree ?? nil else { savedScans[path] = nil; return }
-            present(ResultsModel(tree: tree, volume: volume(forPath: path), asAdministrator: false, scannedAt: date))
+            let results = ResultsModel(tree: tree, volume: volume(forPath: path), asAdministrator: false, scannedAt: date)
+            results.startWatching(since: FSEventStreamEventId(kFSEventStreamEventIdSinceNow))
+            present(results)
         }
     }
 
@@ -188,6 +193,7 @@ final class AppModel {
     func forget(path: String) {
         if case .results(let r) = screen, r.tree.rootPath == path { showOverview() }
         cachedResults[path]?.deletion.cancel()
+        cachedResults[path]?.stopWatching()
         cachedResults[path] = nil
         store.remove(path)
         savedScans[path] = nil

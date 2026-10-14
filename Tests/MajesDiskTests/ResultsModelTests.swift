@@ -218,3 +218,29 @@ import Testing
     m.largestKind = .video
     #expect(m.sidebarItems.map(m.tree.name) == ["new.mov"])
 }
+
+@MainActor @Test func changesMadeOutsideTheAppAreFlagged() async throws {
+    let d = FileManager.default.temporaryDirectory.appendingPathComponent("majes-fse-\(UUID().uuidString)").resolvingSymlinksInPath().path
+    try FileManager.default.createDirectory(atPath: "\(d)/sub", withIntermediateDirectories: true)
+    FileManager.default.createFile(atPath: "\(d)/gone.bin", contents: Data(count: 10_000))
+    FileManager.default.createFile(atPath: "\(d)/keep.bin", contents: Data(count: 10_000))
+    FileManager.default.createFile(atPath: "\(d)/doomed.bin", contents: Data(count: 10_000))
+    defer { try? FileManager.default.removeItem(atPath: d) }
+    let since = FSEventsGetCurrentEventId()
+    let m = ResultsModel(tree: DiskScanner(options: ScanOptions(rootPath: d)).run()!, volume: nil, asAdministrator: false)
+    m.startWatching(since: since)
+    defer { m.stopWatching() }
+    m.addToCollector(m.tree.node(atPath: "\(d)/doomed.bin")!)
+    await m.deleteCollected()                                                      // our own delete: not "changed"
+    try FileManager.default.removeItem(atPath: "\(d)/gone.bin")                    // deleted in Finder
+    FileManager.default.createFile(atPath: "\(d)/sub/new.bin", contents: Data(count: 20_000))
+    for _ in 0..<60 where m.staleFolders.isEmpty { try await Task.sleep(for: .milliseconds(100)) }
+    try await Task.sleep(for: .milliseconds(800))
+    #expect(m.tree.flags(m.tree.node(atPath: "\(d)/gone.bin")!).contains(.vanished))
+    #expect(!m.tree.flags(m.tree.node(atPath: "\(d)/keep.bin")!).contains(.vanished))
+    #expect(m.changedFolders.map(m.tree.path).contains("\(d)/sub"))
+    #expect(m.staleFolders == [m.tree.root])               // the root changed too, and covers sub
+    m.rescan(m.staleFolders)
+    for _ in 0..<50 where m.isRescanning { try await Task.sleep(for: .milliseconds(50)) }
+    #expect(m.tree.node(atPath: "\(d)/sub/new.bin") != nil && m.staleFolders.isEmpty)
+}

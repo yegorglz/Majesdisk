@@ -169,7 +169,13 @@ struct SidebarRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
                     Text(model.displayName(id)).lineLimit(1).truncationMode(.middle)
-                        .strikethrough(flags.contains(.deleted))
+                        .strikethrough(flags.contains(.deleted) || flags.contains(.vanished))
+                        .foregroundStyle(flags.contains(.vanished) ? .secondary : .primary)
+                        .help(flags.contains(.vanished) ? "Removed outside MajesDisk since the scan" : "")
+                    if flags.contains(.changed) {
+                        Text("changed").font(.caption2).foregroundStyle(.orange)
+                            .help("Changed outside MajesDisk since the scan; sizes may be out of date")
+                    }
                     if flags.contains(.secondaryLink) { Text("hard link").font(.caption2).foregroundStyle(.secondary) }
                     if flags.contains(.restricted) { Image(systemName: "lock.fill").font(.caption2).foregroundStyle(.purple) }
                 }

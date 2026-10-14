@@ -17,6 +17,20 @@ scripts/run.sh --scan ~/Downloads   # debug build, launched via `open`, optional
 
 Launch through `open` (as `run.sh` does) so macOS attributes file access to MajesDisk, not to Terminal.
 
+## Beyond DaisyDisk
+
+- **Largest**: the biggest files anywhere under the current folder, filterable by kind (videos, archives & disk
+  images, apps) and by age (unchanged 6+ months / 1+ year).
+- **Suggestions**: known regenerable space hogs (Xcode build data, simulators, caches, iPhone backups, Docker,
+  Trash, npm/Gradle/CocoaPods caches, node_modules) with a note on what each is and one-click Collect.
+- **Remembers scans**: results are saved (Application Support/MajesDisk/Scans) and reopen after a relaunch;
+  a rescan shows what grew (+/−) since the previous one, with a "By growth" sort.
+- **Scans in the background**: each scan runs in its disk or folder row with percent and time left; several
+  can run at once and the rest of the app stays usable.
+- **Notices outside changes**: files removed elsewhere are struck out, changed folders are tagged, and
+  "Rescan Changed" re-measures only those.
+- **Multi-select**: shift-click rows to collect, drag or reveal many at once.
+
 ## Permissions
 
 | What | Why | How |
@@ -62,8 +76,7 @@ are refused by the app and again by the helper.
 ## Differences from DaisyDisk
 
 Not included: cloud-drive scanning (Dropbox, Google Drive, OneDrive, Box), licensing, localization,
-snapshot size estimates, cross-window HDD scan queueing, struck-out detection of external changes,
-dragging items back out of the Collector (use × instead).
+snapshot size estimates, HDD scan queueing (scans of the same spinning disk run in parallel).
 
 ## Debug flags
 

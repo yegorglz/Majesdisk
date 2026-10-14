@@ -35,6 +35,7 @@ extension ResultsModel {
                 }
                 guard let fresh, !tree.isGone(id) else { continue }
                 tree.replaceSubtree(of: id, with: fresh)
+                changedFolders = changedFolders.filter { $0 != id && !tree.isGone($0) }
             }
             for c in collector.items where tree.isGone(c) { collector.remove(c) }
             leaveGoneCenter()
@@ -45,6 +46,12 @@ extension ResultsModel {
             isRescanning = false
             compactIfNeeded()
         }
+    }
+
+    /// Re-measures only what changed outside the app; a changed top folder means a full rescan.
+    func rescanChanged() {
+        let stale = staleFolders
+        if stale.contains(tree.root) { rescanAll() } else { rescan(stale) }
     }
 
     /// ⇧⌘R: scans the whole disk or top folder again, the same way as before.
