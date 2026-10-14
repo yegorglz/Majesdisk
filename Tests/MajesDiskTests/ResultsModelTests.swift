@@ -123,3 +123,16 @@ import Testing
     #expect(m.tree.path(m.center) == "/r/keep")
     #expect(m.collector.items.map(m.tree.path) == ["/r/keep/k"])
 }
+
+@MainActor @Test func mapDescribesItselfToVoiceOver() {
+    let tree = smallTree()
+    let m = ResultsModel(tree: tree, volume: nil, asAdministrator: false)
+    let v = SunburstNSView()
+    v.model = m
+    v.refresh()
+    #expect(v.isAccessibilityElement())
+    #expect(v.accessibilityLabel()?.contains("r") == true)
+    m.hovered = tree.node(atPath: "/r/big")
+    v.refresh()
+    #expect(v.accessibilityLabel()?.contains("big") == true)
+}
