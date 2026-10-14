@@ -98,3 +98,25 @@ import Testing
     try ScanStore(directory: storeDir).save(b.finish())
     #expect(AppModel(store: ScanStore(directory: storeDir)).folderList.contains("/tmp/somewhere"))
 }
+
+@MainActor @Test func scanProgressEstimates() {
+    // Halfway after 10 s → about 10 s left.
+    let e = ScanSession.estimate(bytes: 50, expected: 100, elapsed: 10)
+    #expect(e.fraction == 0.5 && abs(e.remaining! - 10) < 0.001)
+    #expect(ScanSession.estimate(bytes: 500, expected: 100, elapsed: 10).fraction == 0.99)   // never 100% before it's done
+    #expect(ScanSession.estimate(bytes: 2, expected: 100, elapsed: 10).remaining == nil)     // too early to guess
+    #expect(ScanSession.estimate(bytes: 50, expected: nil, elapsed: 10).fraction == nil)     // folder never scanned before
+}
+
+@MainActor @Test func scansRunFromTheOverviewAndOpenWhenDone() async throws {
+    let storeDir = FileManager.default.temporaryDirectory.appendingPathComponent("majes-store-\(UUID().uuidString)")
+    let d = FileManager.default.temporaryDirectory.appendingPathComponent("majes-ov-\(UUID().uuidString)").path
+    try FileManager.default.createDirectory(atPath: d, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(atPath: d); try? FileManager.default.removeItem(at: storeDir) }
+    let app = AppModel(store: ScanStore(directory: storeDir))
+    app.startScan(path: d, asAdministrator: false, warnAboutAccess: false)
+    guard case .overview = app.screen else { Issue.record("scanning keeps the overview on screen"); return }
+    #expect(app.scans[d] != nil)
+    let r = try await waitForResults(app)
+    #expect(r.tree.rootPath == d && app.scans[d] == nil)
+}

@@ -26,7 +26,6 @@ struct RootView: View {
         Group {
             switch model.screen {
             case .overview: OverviewView()
-            case .scanning(let session): ScanProgressView(session: session)
             case .results(let results): ResultsView(results: results)
             }
         }
