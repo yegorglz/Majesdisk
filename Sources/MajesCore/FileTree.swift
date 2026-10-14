@@ -74,6 +74,13 @@ public final class FileTree: @unchecked Sendable {
         return cur
     }
 
+    /// Deleted itself or inside a deleted folder (only the deleted folder carries the flag).
+    public func isGone(_ id: NodeID) -> Bool {
+        var cur: NodeID? = id
+        while let c = cur { if flagList[Int(c)].contains(.deleted) { return true }; cur = parent(c) }
+        return false
+    }
+
     public func isAncestor(_ a: NodeID, of b: NodeID) -> Bool {
         var cur = parent(b)
         while let c = cur { if c == a { return true }; cur = parent(c) }

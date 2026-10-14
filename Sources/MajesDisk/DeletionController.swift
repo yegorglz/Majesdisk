@@ -83,7 +83,9 @@ extension ResultsModel {
             }
             if let f = o.failure, f != .notFound { failures.append(o) }
         }
-        while tree.flags(center).contains(.deleted), let p = tree.parent(center) { history.visit(p) }
+        var live = center
+        while tree.isGone(live), let p = tree.parent(live) { live = p }
+        if live != center { history.visit(live) }
         treeVersion += 1
         AppModel.shared.refreshVolumes()
         guard !failures.isEmpty else { return }

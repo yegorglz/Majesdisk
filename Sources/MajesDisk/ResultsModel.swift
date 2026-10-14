@@ -108,14 +108,17 @@ final class ResultsModel {
         resetPointer()
     }
 
-    func goBack() {
-        let before = center
-        if let id = history.goBack() { transition = tree.isAncestor(id, of: before) ? .zoomOut : .zoomIn; resetPointer() }
-    }
+    func goBack() { step { $0.goBack() } }
+    func goForward() { step { $0.goForward() } }
 
-    func goForward() {
+    /// Moves through history, skipping folders deleted since they were visited.
+    private func step(_ move: (inout NavigationHistory) -> NodeID?) {
         let before = center
-        if let id = history.goForward() { transition = tree.isAncestor(before, of: id) ? .zoomIn : .zoomOut; resetPointer() }
+        while let n = move(&history), tree.isGone(n) {}
+        if tree.isGone(center) { history.visit(tree.root) }  // ran out of live entries
+        guard center != before else { return }
+        transition = tree.isAncestor(center, of: before) ? .zoomOut : .zoomIn
+        resetPointer()
     }
 
     func navigate(to id: NodeID) {
