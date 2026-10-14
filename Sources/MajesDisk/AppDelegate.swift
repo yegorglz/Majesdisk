@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         MainActor.assumeIsolated {
             if case .scanning(let session) = AppModel.shared.screen { session.cancel() }
+            AppModel.shared.saveEditedResults()
         }
     }
 

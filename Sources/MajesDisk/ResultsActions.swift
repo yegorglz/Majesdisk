@@ -38,6 +38,7 @@ extension ResultsModel {
             }
             for c in collector.items where tree.isGone(c) { collector.remove(c) }
             leaveGoneCenter()
+            isDirty = true
             history = NavigationHistory(start: center)  // older entries may point into the replaced subtrees
             hovered = nil; rowHovered = nil; selected = nil; hoveredSmallerObjects = nil; expandedSmallerObjects = nil
             treeVersion += 1

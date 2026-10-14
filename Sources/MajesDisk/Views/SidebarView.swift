@@ -85,8 +85,20 @@ struct SidebarHeader: View {
             case .contents:
                 Text(model.expandedSmallerObjects?.parent == folder ? "Smaller objects in \(model.displayName(folder))" : model.displayName(folder))
                     .font(.headline).lineLimit(1).truncationMode(.middle)
-                Text("\(ByteFormat.string(tree.size(folder))) · ^[\(tree.itemCount(folder)) item](inflect: true)")
-                    .font(.caption).foregroundStyle(.secondary)
+                HStack {
+                    Text("\(ByteFormat.string(tree.size(folder))) · ^[\(tree.itemCount(folder)) item](inflect: true)")
+                        .font(.caption).foregroundStyle(.secondary)
+                    if let d = model.delta(folder), abs(d) >= 1_000_000 { GrowthBadge(delta: d) }
+                    Spacer()
+                    if model.previous != nil {
+                        Picker("Sort", selection: Binding(get: { model.sortByGrowth }, set: { model.sortByGrowth = $0 })) {
+                            Text("By size").tag(false)
+                            Text("By growth").tag(true)
+                        }
+                        .labelsHidden().controlSize(.small).fixedSize()
+                        .help("Compare with the previous scan of this folder")
+                    }
+                }
             case .largest:
                 Text("Biggest files in \(model.displayName(folder))").font(.headline).lineLimit(1).truncationMode(.middle)
                 HStack {
@@ -161,6 +173,7 @@ struct SidebarRow: View {
                     if flags.contains(.secondaryLink) { Text("hard link").font(.caption2).foregroundStyle(.secondary) }
                     if flags.contains(.restricted) { Image(systemName: "lock.fill").font(.caption2).foregroundStyle(.purple) }
                 }
+                if let d = model.delta(id), abs(d) >= 1_000_000 { GrowthBadge(delta: d) }
                 if let location {
                     Text(location).font(.caption2).foregroundStyle(.secondary).lineLimit(1).truncationMode(.head)
                 }
@@ -249,5 +262,17 @@ struct ItemInfoView: View {
     var modified: Date? {
         guard model.tree.virtualKind(id) == nil else { return nil }
         return (try? FileManager.default.attributesOfItem(atPath: model.tree.path(id)))?[.modificationDate] as? Date
+    }
+}
+
+/// "+52 MB" since the previous scan: orange when something grew, green when space was freed.
+struct GrowthBadge: View {
+    let delta: Int64
+
+    var body: some View {
+        Text((delta > 0 ? "+" : "−") + ByteFormat.string(UInt64(abs(delta))))
+            .font(.caption2.monospacedDigit().weight(.semibold))
+            .foregroundStyle(delta > 0 ? Color.orange : Color.green)
+            .help(delta > 0 ? "Grew since the previous scan" : "Smaller than in the previous scan")
     }
 }

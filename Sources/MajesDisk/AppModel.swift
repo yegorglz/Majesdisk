@@ -5,6 +5,9 @@ import Observation
 @MainActor @Observable
 final class AppModel {
     static let shared = AppModel()
+    let store: ScanStore
+    /// Scans saved on disk by root path, with their date: they can be shown again after a relaunch.
+    var savedScans: [String: Date] = [:]
 
     enum Screen { case overview, scanning(ScanSession), results(ResultsModel) }
 
@@ -13,7 +16,12 @@ final class AppModel {
     var starred: [String] = StarredFolders().paths
     /// Folders scanned this session; clicking their icon stars them so they stay across launches.
     var recentFolders: [String] = []
-    var folderList: [String] { starred + recentFolders.filter { !starred.contains($0) } }
+    /// Starred folders, then this session's folders, then saved folder scans (newest first).
+    var folderList: [String] {
+        let saved = savedScans.filter { path, _ in !volumes.contains { $0.mountPath == path } }.sorted { $0.value > $1.value }.map(\.key)
+        var seen = Set<String>()
+        return (starred + recentFolders + saved).filter { seen.insert($0).inserted }
+    }
     var optionKeyDown = false
     var fullDiskAccess = FullDiskAccess.isGranted()
     var snapshotsVolume: VolumeInfo?
@@ -21,11 +29,15 @@ final class AppModel {
     var cachedResults: [String: ResultsModel] = [:]
     @ObservationIgnored private var refreshing = false
     @ObservationIgnored var warnedAboutAccess = false
+    /// A saved scan being read from disk.
+    var loadingPath: String?
     @ObservationIgnored private var timer: Timer?
     @ObservationIgnored private var flagsMonitor: Any?
     @ObservationIgnored private var handledLaunchArgs = false
 
-    init() {
+    init(store: ScanStore = ScanStore()) {
+        self.store = store
+        savedScans = store.saved()
         // Admin-scan work folders left behind by a quit mid-scan.
         let tmp = FileManager.default.temporaryDirectory
         for name in (try? FileManager.default.contentsOfDirectory(atPath: tmp.path)) ?? [] where name.hasPrefix("MajesDisk-") {
@@ -88,12 +100,13 @@ final class AppModel {
         }
         leaveResults()
         if volume(forPath: path) == nil, !recentFolders.contains(path) { recentFolders.insert(path, at: 0) }
-        let session = ScanSession(rootPath: path, asAdministrator: asAdministrator, volume: volume(forPath: path))
+        let session = ScanSession(rootPath: path, asAdministrator: asAdministrator, volume: volume(forPath: path), store: store)
         session.onFinish = { [weak self] state in
             guard let self else { return }
             switch state {
-            case .finished(let tree):
-                let results = ResultsModel(tree: tree, volume: session.volume, asAdministrator: asAdministrator)
+            case .finished(let tree, let previous):
+                self.savedScans[path] = Date()
+                let results = ResultsModel(tree: tree, volume: session.volume, asAdministrator: asAdministrator, previous: previous)
                 self.present(results)
                 #if DEBUG
                 self.applyDebugArguments(to: results)
@@ -131,10 +144,26 @@ final class AppModel {
         screen = .results(results)
     }
 
+    func hasResults(_ path: String) -> Bool { cachedResults[path] != nil || savedScans[path] != nil }
+
+    /// Shows a scan from memory, or reads the saved one from disk (seconds for a whole disk).
     func showResults(for path: String) {
-        guard let r = cachedResults[path] else { return }
         leaveResults()
-        screen = .results(r)
+        if let r = cachedResults[path] { screen = .results(r); return }
+        guard let date = savedScans[path] else { return }
+        let store = store
+        loadingPath = path
+        Task {
+            let tree = await Task.detached(priority: .userInitiated) { try? store.load(path) }.value
+            loadingPath = nil
+            guard let tree = tree ?? nil else { savedScans[path] = nil; return }
+            present(ResultsModel(tree: tree, volume: volume(forPath: path), asAdministrator: false, scannedAt: date))
+        }
+    }
+
+    /// Edits made after a scan (deletes, folder rescans) are saved when the app quits.
+    func saveEditedResults() {
+        for r in cachedResults.values where r.isDirty { try? store.save(r.tree, scannedAt: r.scannedAt) }
     }
 
     /// Leaving a results screen aborts a pending delete: its Cancel button would no longer be visible.
@@ -153,6 +182,8 @@ final class AppModel {
         if case .results(let r) = screen, r.tree.rootPath == path { showOverview() }
         cachedResults[path]?.deletion.cancel()
         cachedResults[path] = nil
+        store.remove(path)
+        savedScans[path] = nil
     }
 
     #if DEBUG

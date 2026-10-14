@@ -51,3 +51,50 @@ import Testing
     app.fullDiskAccess = true
     #expect(!app.needsAccessWarning(for: "/"))
 }
+
+@MainActor private func waitForResults(_ app: AppModel) async throws -> ResultsModel {
+    for _ in 0..<100 {
+        if case .results(let r) = app.screen { return r }
+        try await Task.sleep(for: .milliseconds(50))
+    }
+    throw CancellationError()
+}
+
+@MainActor @Test func scansSurviveARelaunchAndShowWhatGrew() async throws {
+    let storeDir = FileManager.default.temporaryDirectory.appendingPathComponent("majes-store-\(UUID().uuidString)")
+    let d = FileManager.default.temporaryDirectory.appendingPathComponent("majes-grow-\(UUID().uuidString)").path
+    try FileManager.default.createDirectory(atPath: "\(d)/sub", withIntermediateDirectories: true)
+    FileManager.default.createFile(atPath: "\(d)/sub/a", contents: Data(count: 10_000))
+    defer { try? FileManager.default.removeItem(atPath: d); try? FileManager.default.removeItem(at: storeDir) }
+
+    let first = AppModel(store: ScanStore(directory: storeDir))
+    first.startScan(path: d, asAdministrator: false, warnAboutAccess: false)
+    _ = try await waitForResults(first)
+
+    // "Relaunch": a fresh model sees the saved scan and shows it without scanning.
+    let second = AppModel(store: ScanStore(directory: storeDir))
+    #expect(second.savedScans[d] != nil && second.hasResults(d))
+    second.showResults(for: d)
+    let reopened = try await waitForResults(second)
+    #expect(reopened.tree.node(atPath: "\(d)/sub/a") != nil)
+
+    // A rescan compares with the saved one.
+    FileManager.default.createFile(atPath: "\(d)/sub/new", contents: Data(count: 50_000))
+    second.startScan(path: d, asAdministrator: false, warnAboutAccess: false)
+    var rescanned = try await waitForResults(second)
+    for _ in 0..<100 where rescanned === reopened { try await Task.sleep(for: .milliseconds(50)); rescanned = try await waitForResults(second) }
+    let sub = try #require(rescanned.tree.node(atPath: "\(d)/sub"))
+    #expect(rescanned.delta(sub) == Int64(rescanned.tree.size(rescanned.tree.node(atPath: "\(d)/sub/new")!)))
+    #expect(rescanned.delta(rescanned.tree.node(atPath: "\(d)/sub/a")!) == 0)
+
+    second.forget(path: d)
+    #expect(AppModel(store: ScanStore(directory: storeDir)).savedScans[d] == nil)
+}
+
+@MainActor @Test func savedFolderScansAreListedAfterRelaunch() throws {
+    let storeDir = FileManager.default.temporaryDirectory.appendingPathComponent("majes-store-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: storeDir) }
+    let b = FileTreeBuilder(rootPath: "/tmp/somewhere")
+    try ScanStore(directory: storeDir).save(b.finish())
+    #expect(AppModel(store: ScanStore(directory: storeDir)).folderList.contains("/tmp/somewhere"))
+}

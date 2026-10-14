@@ -51,8 +51,17 @@ final class ResultsModel {
     }
     @ObservationIgnored private var layoutCache: (key: [Int], segments: [SunburstSegment])?
 
-    init(tree: FileTree, volume: VolumeInfo?, asAdministrator: Bool) {
+    /// The previous saved scan of the same folder, if any, for "what grew" (shortcut: held in memory
+    /// alongside the current tree, doubling its RAM; drop it if memory becomes a problem).
+    let previous: FileTree?
+    let scannedAt: Date
+    /// Edited (deleted or rescanned) since it was saved; re-saved on quit.
+    var isDirty = false
+    var sortByGrowth = false
+
+    init(tree: FileTree, volume: VolumeInfo?, asAdministrator: Bool, previous: FileTree? = nil, scannedAt: Date = Date()) {
         self.tree = tree; self.volume = volume; self.asAdministrator = asAdministrator
+        self.previous = previous; self.scannedAt = scannedAt
         history = NavigationHistory(start: tree.root)
     }
 
@@ -121,6 +130,13 @@ final class ResultsModel {
         return items
     }
 
+    /// Bytes gained (positive) or freed since the previous scan; nil without one. New items count fully.
+    func delta(_ id: NodeID) -> Int64? {
+        guard let previous, tree.virtualKind(id) == nil else { return nil }
+        let before = previous.node(atPath: tree.path(id)).map { previous.size($0) } ?? 0
+        return Int64(tree.size(id)) - Int64(before)
+    }
+
     /// A node's folder relative to the map center, for rows listed out of their folder.
     func location(of id: NodeID) -> String {
         guard let parent = tree.parent(id) else { return "" }
@@ -153,6 +169,7 @@ final class ResultsModel {
         case .contents: break
         }
         let all = tree.children(sidebarFolder)
+        if sortByGrowth, previous != nil { return all.sorted { (delta($0) ?? 0) > (delta($1) ?? 0) } }
         if let s = expandedSmallerObjects, s.parent == sidebarFolder, s.start < all.count { return Array(all[s.start...]) }
         return Array(all.prefix(sidebarFold ?? all.count))
     }
@@ -161,7 +178,7 @@ final class ResultsModel {
     /// measured as if the folder were the center. Nil when nothing (or only one item) would fold.
     var sidebarFold: Int? {
         let folder = sidebarFolder
-        guard sidebarMode == .contents, expandedSmallerObjects?.parent != folder, tree.size(folder) > 0 else { return nil }
+        guard sidebarMode == .contents, !(sortByGrowth && previous != nil), expandedSmallerObjects?.parent != folder, tree.size(folder) > 0 else { return nil }
         let all = tree.children(folder)
         let total = Double(tree.size(folder))
         guard let i = all.firstIndex(where: { 2 * .pi * Double(tree.size($0)) / total < SunburstConfig().minSegmentAngle }),

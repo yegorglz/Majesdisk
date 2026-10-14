@@ -11,7 +11,8 @@ final class CancelFlag: @unchecked Sendable {
 
 @MainActor @Observable
 final class ScanSession {
-    enum State { case running, finished(FileTree), failed(String), cancelled }
+    /// `previous` is the last saved scan of the same folder, for "what grew" comparisons.
+    enum State { case running, finished(FileTree, previous: FileTree?), failed(String), cancelled }
     let rootPath: String
     let asAdministrator: Bool
     let volume: VolumeInfo?
@@ -21,8 +22,10 @@ final class ScanSession {
     @ObservationIgnored let cancelFlag = CancelFlag()
     @ObservationIgnored var helperScan: HelperScan?
 
-    init(rootPath: String, asAdministrator: Bool, volume: VolumeInfo?) {
-        self.rootPath = rootPath; self.asAdministrator = asAdministrator; self.volume = volume
+    let store: ScanStore?
+
+    init(rootPath: String, asAdministrator: Bool, volume: VolumeInfo?, store: ScanStore? = nil) {
+        self.rootPath = rootPath; self.asAdministrator = asAdministrator; self.volume = volume; self.store = store
     }
 
     func start() {
@@ -43,10 +46,11 @@ final class ScanSession {
         cancelAdministratorScan()
     }
 
-    /// Attaches hidden space for whole-volume scans, then hands the tree to the UI.
+    /// Attaches hidden space for whole-volume scans, saves the scan (keeping the previous one for
+    /// comparison), then hands the tree to the UI. All before anyone can edit the tree.
     func completed(_ tree: FileTree) async {
+        let root = rootPath, store = store
         if let volume, volume.mountPath == rootPath {
-            let root = rootPath
             await Task.detached(priority: .userInitiated) {
                 let other = Self.diskInfo(for: root).map {
                     APFSInfo.otherVolumesBytes(containers: APFSInfo.containers(), scanned: $0, isRootScan: root == "/")
@@ -57,7 +61,12 @@ final class ScanSession {
                 }
             }.value
         }
-        finish(.finished(tree))
+        let previous: FileTree? = await Task.detached(priority: .userInitiated) {
+            let previous = try? store?.load(root)
+            try? store?.save(tree)
+            return previous ?? nil
+        }.value
+        finish(.finished(tree, previous: previous))
     }
 
     func finish(_ s: State) {
