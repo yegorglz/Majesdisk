@@ -4,7 +4,8 @@ public enum TreeCodecError: Error, Equatable { case badMagic, truncated }
 
 /// Compact binary form of a FileTree, used to hand an admin scan from the root helper to the app.
 /// Little-endian: "MJD1", u32 count, per node (i32 parent, u16 flags, u64 size, u32 items, u16 len, utf8),
-/// then u32 virtual count and (i32 id, u8 kind) pairs. Node 0's name is the root path.
+/// then u32 virtual count and (i32 id, u8 kind) pairs, then u32 link count and (i32 id, u64 key) pairs.
+/// Node 0's name is the root path.
 public enum TreeCodec {
     static let magic = Data("MJD1".utf8)
 
@@ -19,6 +20,8 @@ public enum TreeCodec {
         }
         put(UInt32(t.virtualKinds.count))
         for (id, kind) in t.virtualKinds.sorted(by: { $0.key < $1.key }) { put(id); put(kind.rawValue) }
+        put(UInt32(t.linkKeys.count))
+        for (id, key) in t.linkKeys.sorted(by: { $0.key < $1.key }) { put(id); put(key) }
         return d
     }
 
@@ -55,7 +58,12 @@ public enum TreeCodec {
             let id = try get(Int32.self)
             if let k = VirtualKind(rawValue: try get(UInt8.self)), id >= 0, Int(id) < count { virtuals[id] = k }
         }
+        var links: [NodeID: UInt64] = [:]
+        for _ in 0..<Int(try get(UInt32.self)) {
+            let id = try get(Int32.self), key = try get(UInt64.self)
+            if id >= 0, Int(id) < count { links[id] = key }
+        }
         return FileTree(rootPath: names[0], names: names, parents: parents, sizes: sizes, itemCounts: items,
-                        flags: flags, virtualKinds: virtuals)
+                        flags: flags, virtualKinds: virtuals, linkKeys: links)
     }
 }
