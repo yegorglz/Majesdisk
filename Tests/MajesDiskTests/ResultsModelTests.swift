@@ -174,3 +174,12 @@ import Testing
     #expect(m.collector.items == [dir])
     #expect(m.alert?.message.contains("“d”") == true)
 }
+
+@MainActor @Test func everythingInsideACollectedFolderCountsAsCollected() {
+    let b = FileTreeBuilder(rootPath: "/r")
+    let dir = b.appendChildren(of: b.root, entries: [DirEntry(name: "a", kind: .directory), DirEntry(name: "z", kind: .file, allocatedSize: 1)])[0]
+    let kid = b.appendChildren(of: dir, entries: [DirEntry(name: "big", kind: .file, allocatedSize: 9)])[0]
+    let m = ResultsModel(tree: b.finish(), volume: nil, asAdministrator: false)
+    m.toggleCollector(dir)
+    #expect(m.isCollected(kid) && m.isCollected(dir) && !m.isCollected(m.tree.node(atPath: "/r/z")!))
+}
