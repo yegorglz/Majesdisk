@@ -163,3 +163,14 @@ import Testing
     #expect(abs(upperLeft.redComponent - upperLeft.blueComponent) < 0.02 && upperLeft.redComponent > 0.3)  // grey file B
     #expect(abs(lowerLeft.redComponent - lowerLeft.blueComponent) > 0.1)                                    // colored folder A
 }
+
+@MainActor @Test func collectingSomethingAlreadyCoveredSaysSo() {
+    let b = FileTreeBuilder(rootPath: "/r")
+    let dir = b.appendChildren(of: b.root, entries: [DirEntry(name: "d", kind: .directory), DirEntry(name: "other", kind: .file, allocatedSize: 1)])[0]
+    let kid = b.appendChildren(of: dir, entries: [DirEntry(name: "k", kind: .file, allocatedSize: 5)])[0]
+    let m = ResultsModel(tree: b.finish(), volume: nil, asAdministrator: false)
+    m.toggleCollector(dir)
+    m.toggleCollector(kid)
+    #expect(m.collector.items == [dir])
+    #expect(m.alert?.message.contains("“d”") == true)
+}
