@@ -51,8 +51,14 @@ extension ResultsModel {
     }
 
     func addToCollector(_ id: NodeID) {
-        if case .rejected(let why) = collector.add(id, in: tree, verdict: protectionVerdict) {
+        switch collector.add(id, in: tree, verdict: protectionVerdict) {
+        case .rejected(let why):
             alert = AlertInfo(title: "“\(displayName(id))” can't be collected", message: why)
+        case .alreadyCovered:
+            if let holder = collector.items.first(where: { tree.isAncestor($0, of: id) }) {
+                alert = AlertInfo(title: "Already in the Collector", message: "It's inside “\(displayName(holder))”, which is collected.")
+            }
+        case .added: break
         }
     }
 
