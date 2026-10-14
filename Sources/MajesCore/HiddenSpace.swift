@@ -2,7 +2,6 @@ public struct HiddenSpaceBreakdown: Sendable, Equatable {
     public var purgeable: UInt64
     public var otherVolumes: UInt64
     public var stillHidden: UInt64
-    public var total: UInt64 { purgeable + otherVolumes + stillHidden }
     public init(purgeable: UInt64, otherVolumes: UInt64, stillHidden: UInt64) {
         self.purgeable = purgeable; self.otherVolumes = otherVolumes; self.stillHidden = stillHidden
     }

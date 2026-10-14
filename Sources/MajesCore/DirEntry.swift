@@ -11,15 +11,14 @@ public struct DirEntry: Sendable, Equatable {
     public var cloneID: UInt64
     public var cloneRefCount: UInt32
     public var isMountPoint: Bool
-    public var isCompressed: Bool
     public var isDataless: Bool
 
     public init(name: String, kind: Kind, allocatedSize: UInt64 = 0, fileID: UInt64 = 0, linkCount: UInt32 = 1,
                 cloneID: UInt64 = 0, cloneRefCount: UInt32 = 1, isMountPoint: Bool = false,
-                isCompressed: Bool = false, isDataless: Bool = false) {
+                isDataless: Bool = false) {
         self.name = name; self.kind = kind; self.allocatedSize = allocatedSize; self.fileID = fileID
         self.linkCount = linkCount; self.cloneID = cloneID; self.cloneRefCount = cloneRefCount
-        self.isMountPoint = isMountPoint; self.isCompressed = isCompressed; self.isDataless = isDataless
+        self.isMountPoint = isMountPoint; self.isDataless = isDataless
     }
 }
 
