@@ -15,7 +15,8 @@ public enum ProtectedPaths {
 
     public static func verdict(for path: String, homeDirectory: String = NSHomeDirectory(), volumeRoots: [String] = []) -> ProtectionVerdict {
         let p = normalize(path), home = normalize(homeDirectory)
-        if exact.contains(p) || p == home || homeChildren.contains(where: { p == home + "/" + $0 })
+        let isAccountHome = p.hasPrefix("/Users/") && p.split(separator: "/").count == 2  // any user's home, /Users/Shared
+        if exact.contains(p) || p == home || isAccountHome || homeChildren.contains(where: { p == home + "/" + $0 })
             || volumeRoots.map(normalize).contains(p) {
             return .protected(essential)
         }
