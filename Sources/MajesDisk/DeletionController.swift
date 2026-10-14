@@ -94,6 +94,7 @@ extension ResultsModel {
             if let f = o.failure, f != .notFound { failures.append(o) }
         }
         leaveGoneCenter()
+        isDirty = true
         treeVersion += 1
         AppModel.shared.refreshVolumes()
         guard !failures.isEmpty else { compactIfNeeded(); return }  // with failures, the rescan below compacts when done

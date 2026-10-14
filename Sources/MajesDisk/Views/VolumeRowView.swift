@@ -14,6 +14,7 @@ struct VolumeRowView: View {
                 Text(volume.name).font(.headline)
                 Text("\(volume.fileSystem) · \(ByteFormat.string(volume.totalBytes))")
                     .font(.caption).foregroundStyle(.secondary)
+                ScannedLabel(path: volume.mountPath)
             }
             .frame(width: 220, alignment: .leading)
             Spacer(minLength: 12)
@@ -50,6 +51,7 @@ struct FolderRowView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text((path as NSString).lastPathComponent).font(.headline)
                 Text(path).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                ScannedLabel(path: path)
             }
             Spacer()
             ScanMenuButton(path: path, volume: nil)
@@ -65,7 +67,10 @@ struct ScanMenuButton: View {
     let volume: VolumeInfo?
 
     var body: some View {
-        let cached = model.cachedResults[path] != nil
+        let cached = model.hasResults(path)
+        if model.loadingPath == path {
+            ProgressView().controlSize(.small).frame(width: 70)
+        } else {
         Menu {
             if cached {
                 Button("Show") { model.showResults(for: path) }
@@ -87,5 +92,18 @@ struct ScanMenuButton: View {
         }
         .menuStyle(.borderedButton)
         .fixedSize()
+        }
+    }
+}
+
+/// "Scanned 3 days ago" under a disk or folder that has saved results.
+struct ScannedLabel: View {
+    @Environment(AppModel.self) private var model
+    let path: String
+
+    var body: some View {
+        if let date = model.savedScans[path] {
+            Text("Scanned \(date.formatted(.relative(presentation: .named)))").font(.caption2).foregroundStyle(.tertiary)
+        }
     }
 }
