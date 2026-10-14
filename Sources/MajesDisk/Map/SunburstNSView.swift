@@ -45,7 +45,8 @@ final class SunburstNSView: NSView {
     /// Called whenever the model changes; recomputes the layout only when its inputs changed.
     func refresh() {
         guard let model else { return }
-        if let shown = shownCenter, shown != model.center, !segments.isEmpty {
+        if let shown = shownCenter, shown != model.center, !segments.isEmpty,
+           !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
             oldSegments = segments
             transitionDirection = model.transition
             let anchor = transitionDirection == .zoomIn
@@ -62,7 +63,20 @@ final class SunburstNSView: NSView {
             if let sel = model.selected { return s.kind != .smallerObjects && s.node == sel }
             return false
         }
+        updateAccessibility(model)
         needsDisplay = true
+    }
+
+    /// VoiceOver can't read wedges; it gets the folder and the pointed item, and the sidebar lists the rest.
+    private func updateAccessibility(_ model: ResultsModel) {
+        setAccessibilityElement(true)
+        setAccessibilityRole(.image)
+        var label = "Disk map of \(model.displayName(model.center)), \(ByteFormat.string(model.tree.size(model.center)))"
+        if let p = model.hovered ?? model.rowHovered ?? model.selected {
+            label += ". Pointing at \(model.displayName(p)), \(ByteFormat.string(model.tree.size(p)))"
+        }
+        setAccessibilityLabel(label)
+        setAccessibilityHelp("The list beside the map shows the same items. Return opens a folder; Command-Up goes to the enclosing folder.")
     }
 
     private func startTransition() {
