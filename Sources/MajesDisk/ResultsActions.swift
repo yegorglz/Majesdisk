@@ -15,7 +15,6 @@ extension ResultsModel {
         isRescanning = true
         let admin = asAdministrator
         Task {
-            defer { isRescanning = false }
             for id in ids where !tree.isGone(id) {
                 let path = tree.path(id)
                 // Same mode as the original scan: as administrator through the helper, else in-process
@@ -42,6 +41,7 @@ extension ResultsModel {
             history = NavigationHistory(start: center)  // older entries may point into the replaced subtrees
             hovered = nil; rowHovered = nil; selected = nil; hoveredSmallerObjects = nil; expandedSmallerObjects = nil
             treeVersion += 1
+            isRescanning = false
             compactIfNeeded()
         }
     }
