@@ -64,3 +64,20 @@ import Testing
     #expect(!m.isRescanning)
     #expect(m.alert?.title == "Rescan failed")
 }
+
+@MainActor @Test func historySkipsDeletedFolders() {
+    let b = FileTreeBuilder(rootPath: "/r")
+    let ids = b.appendChildren(of: b.root, entries: [DirEntry(name: "a", kind: .directory), DirEntry(name: "b", kind: .directory)])
+    let inner = b.appendChildren(of: ids[0], entries: [DirEntry(name: "deep", kind: .directory)])[0]
+    b.appendChildren(of: inner, entries: [DirEntry(name: "x", kind: .file, allocatedSize: 5)])
+    b.appendChildren(of: ids[1], entries: [DirEntry(name: "y", kind: .file, allocatedSize: 5)])
+    let m = ResultsModel(tree: b.finish(), volume: nil, asAdministrator: false)
+    m.enter(ids[1]); m.goUp(); m.enter(ids[0]); m.enter(inner); m.goUp(); m.goUp()   // history: r b r a deep a [r]
+    m.tree.markDeleted(ids[0])
+    m.goBack()
+    #expect(m.center == m.tree.root)      // "a" and "a/deep" are gone; lands on the previous live folder
+    m.goBack()
+    #expect(m.center == ids[1])
+    m.goForward(); m.goForward()
+    #expect(!m.tree.isGone(m.center))
+}
