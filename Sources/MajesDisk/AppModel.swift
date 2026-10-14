@@ -20,6 +20,7 @@ final class AppModel {
     /// Finished scans by root path. Going back to the overview keeps them ("Show"); only Forget drops them.
     var cachedResults: [String: ResultsModel] = [:]
     @ObservationIgnored private var refreshing = false
+    @ObservationIgnored var warnedAboutAccess = false
     @ObservationIgnored private var timer: Timer?
     @ObservationIgnored private var flagsMonitor: Any?
     @ObservationIgnored private var handledLaunchArgs = false
@@ -63,7 +64,28 @@ final class AppModel {
         starred = s.paths
     }
 
-    func startScan(path: String, asAdministrator: Bool) {
+    /// Without Full Disk Access, macOS stops a scan of the disk or the home folder with one privacy
+    /// prompt per protected folder. Say so once per launch, before it happens.
+    func needsAccessWarning(for path: String) -> Bool {
+        let home = NSHomeDirectory()
+        return fullDiskAccess != true && !warnedAboutAccess && (path == "/" || path == home || home.hasPrefix(path + "/"))
+    }
+
+    func startScan(path: String, asAdministrator: Bool, warnAboutAccess: Bool = true) {
+        if warnAboutAccess, needsAccessWarning(for: path) {
+            warnedAboutAccess = true
+            let alert = NSAlert()
+            alert.messageText = "Grant Full Disk Access first?"
+            alert.informativeText = "Without it, macOS will ask about Desktop, Documents, Downloads and other apps' data one by one during the scan, and anything you decline is counted as hidden space."
+            alert.addButton(withTitle: "Open System Settings")
+            alert.addButton(withTitle: "Scan Anyway")
+            alert.addButton(withTitle: "Cancel")
+            switch alert.runModal() {
+            case .alertFirstButtonReturn: NSWorkspace.shared.open(FullDiskAccess.settingsURL); return
+            case .alertSecondButtonReturn: break
+            default: return
+            }
+        }
         leaveResults()
         if volume(forPath: path) == nil, !recentFolders.contains(path) { recentFolders.insert(path, at: 0) }
         let session = ScanSession(rootPath: path, asAdministrator: asAdministrator, volume: volume(forPath: path))
@@ -150,7 +172,7 @@ final class AppModel {
         handledLaunchArgs = true
         let args = CommandLine.arguments
         if let i = args.firstIndex(of: "--scan"), i + 1 < args.count {
-            startScan(path: (args[i + 1] as NSString).expandingTildeInPath, asAdministrator: args.contains("--admin"))
+            startScan(path: (args[i + 1] as NSString).expandingTildeInPath, asAdministrator: args.contains("--admin"), warnAboutAccess: false)
         }
     }
 }
