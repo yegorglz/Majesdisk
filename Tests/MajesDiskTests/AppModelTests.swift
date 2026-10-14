@@ -18,12 +18,12 @@ import Testing
     app.present(r)
     app.showOverview()
     guard case .overview = app.screen else { Issue.record("expected overview"); return }
-    #expect(app.cachedResults[d] === r)
+    #expect(app.cachedResults[AppModel.canonical(d)] === r)
     app.showResults(for: d)
     guard case .results(let shown) = app.screen else { Issue.record("expected results"); return }
     #expect(shown === r)
     app.forget(path: d)
-    #expect(app.cachedResults[d] == nil)
+    #expect(app.cachedResults[AppModel.canonical(d)] == nil)
 }
 
 @MainActor @Test func leavingResultsCancelsDeletionCountdown() async throws {
@@ -62,8 +62,9 @@ import Testing
 
 @MainActor @Test func scansSurviveARelaunchAndShowWhatGrew() async throws {
     let storeDir = FileManager.default.temporaryDirectory.appendingPathComponent("majes-store-\(UUID().uuidString)")
-    let d = FileManager.default.temporaryDirectory.appendingPathComponent("majes-grow-\(UUID().uuidString)").path
-    try FileManager.default.createDirectory(atPath: "\(d)/sub", withIntermediateDirectories: true)
+    let raw = FileManager.default.temporaryDirectory.appendingPathComponent("majes-grow-\(UUID().uuidString)").path
+    try FileManager.default.createDirectory(atPath: "\(raw)/sub", withIntermediateDirectories: true)
+    let d = AppModel.canonical(raw)
     FileManager.default.createFile(atPath: "\(d)/sub/a", contents: Data(count: 10_000))
     defer { try? FileManager.default.removeItem(atPath: d); try? FileManager.default.removeItem(at: storeDir) }
 
@@ -110,8 +111,9 @@ import Testing
 
 @MainActor @Test func scansRunFromTheOverviewAndOpenWhenDone() async throws {
     let storeDir = FileManager.default.temporaryDirectory.appendingPathComponent("majes-store-\(UUID().uuidString)")
-    let d = FileManager.default.temporaryDirectory.appendingPathComponent("majes-ov-\(UUID().uuidString)").path
-    try FileManager.default.createDirectory(atPath: d, withIntermediateDirectories: true)
+    let raw = FileManager.default.temporaryDirectory.appendingPathComponent("majes-ov-\(UUID().uuidString)").path
+    try FileManager.default.createDirectory(atPath: raw, withIntermediateDirectories: true)
+    let d = AppModel.canonical(raw)
     defer { try? FileManager.default.removeItem(atPath: d); try? FileManager.default.removeItem(at: storeDir) }
     let app = AppModel(store: ScanStore(directory: storeDir))
     app.startScan(path: d, asAdministrator: false, warnAboutAccess: false)
@@ -119,4 +121,10 @@ import Testing
     #expect(app.scans[d] != nil)
     let r = try await waitForResults(app)
     #expect(r.tree.rootPath == d && app.scans[d] == nil)
+}
+
+@MainActor @Test func onePathSpellingPerFolder() {
+    #expect(AppModel.canonical("/tmp") == "/private/tmp")
+    #expect(AppModel.canonical("/") == "/")
+    #expect(AppModel.canonical("/nonexistent-\(UUID())/x").hasSuffix("/x"))
 }

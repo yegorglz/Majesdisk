@@ -6,6 +6,13 @@ import Foundation
 public struct ScanStore: Sendable {
     public let directory: URL
     private var index: URL { directory.appendingPathComponent("index.plist") }
+    private var sizesFile: URL { directory.appendingPathComponent("sizes.plist") }
+
+    /// The total of the saved scan, without loading it — the expected size of a rescan.
+    public func savedSize(_ rootPath: String) -> UInt64? {
+        guard let data = try? Data(contentsOf: sizesFile) else { return nil }
+        return (try? PropertyListDecoder().decode([String: UInt64].self, from: data))?[rootPath]
+    }
 
     public static var defaultDirectory: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -26,6 +33,9 @@ public struct ScanStore: Sendable {
         var all = saved()
         all[tree.rootPath] = scannedAt
         try PropertyListEncoder().encode(all).write(to: index, options: .atomic)
+        var sizes = (try? PropertyListDecoder().decode([String: UInt64].self, from: Data(contentsOf: sizesFile))) ?? [:]
+        sizes[tree.rootPath] = tree.size(tree.root)
+        try PropertyListEncoder().encode(sizes).write(to: sizesFile, options: .atomic)
     }
 
     public func load(_ rootPath: String) throws -> FileTree? {

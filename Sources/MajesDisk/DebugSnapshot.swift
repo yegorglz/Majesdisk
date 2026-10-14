@@ -29,7 +29,7 @@ enum DebugSnapshot {
         case .results(let r):
             lines.append("screen: results \(r.tree.rootPath) admin=\(r.asAdministrator)")
             lines.append("root size=\(r.tree.size(r.tree.root)) items=\(r.tree.itemCount(r.tree.root)) nodes=\(r.tree.nodeCount)")
-            lines.append("center: \(r.tree.path(r.center))")
+            lines.append("center: \(r.tree.path(r.center)) changed=\(r.staleFolders.count)")
             lines.append("sidebar: " + r.sidebarItems.prefix(8).map { "\(r.displayName($0))=\(r.tree.size($0))" }.joined(separator: ", "))
             lines.append("collector: \(r.collector.items.map(r.tree.path)) deletion=\(r.deletion.phase)")
             if let a = r.alert { lines.append("alert: \(a.title) — \(a.message)") }
