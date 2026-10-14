@@ -76,11 +76,17 @@ public enum HelperCommand {
         return 0
     }
 
-    /// Root writes these; 0644 lets the non-root app read them.
+    /// Root writes these into a user-owned folder: create a fresh file (never following a planted
+    /// symlink), set 0644 on the open file so the app can read it, then rename it into place.
     @discardableResult
     static func writeReadable(_ data: Data, to path: String) -> Bool {
-        guard (try? data.write(to: URL(fileURLWithPath: path), options: .atomic)) != nil else { return false }
-        chmod(path, 0o644)
+        let tmp = "\(path).\(UUID().uuidString).tmp"
+        let fd = open(tmp, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o644)
+        guard fd >= 0 else { return false }
+        let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+        let ok = fchmod(fd, 0o644) == 0 && (try? handle.write(contentsOf: data)) != nil
+        try? handle.close()
+        guard ok, rename(tmp, path) == 0 else { unlink(tmp); return false }
         return true
     }
 }
