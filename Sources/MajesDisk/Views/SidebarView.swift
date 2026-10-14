@@ -11,26 +11,38 @@ struct SidebarView: View {
         let items = model.sidebarItems
         let tree = model.tree
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(model.expandedSmallerObjects?.parent == folder ? "Smaller objects in \(model.displayName(folder))" : model.displayName(folder))
-                    .font(.headline).lineLimit(1).truncationMode(.middle)
-                Text("\(ByteFormat.string(tree.size(folder))) · ^[\(tree.itemCount(folder)) item](inflect: true)")
-                    .font(.caption).foregroundStyle(.secondary)
+            Picker("Show", selection: Binding(get: { model.sidebarMode }, set: { model.sidebarMode = $0; model.selected = nil })) {
+                ForEach(SidebarMode.allCases, id: \.self) { Text($0.rawValue) }
             }
-            .padding(12)
+            .pickerStyle(.segmented).labelsHidden()
+            .padding([.horizontal, .top], 12)
+            SidebarHeader(model: model, folder: folder).padding(12)
             Divider()
             ScrollViewReader { proxy in
                 List(selection: Binding(get: { model.selection }, set: { model.sidebarSelectionChanged($0, commandKey: NSEvent.modifierFlags.contains(.command)) })) {
                     ForEach(items, id: \.self) { id in
-                        SidebarRow(model: model, id: id, parentSize: tree.size(folder))
-                            .id(id)
-                            .listRowBackground(rowBackground(id))
+                        Group {
+                            if model.sidebarMode == .suggestions, let s = model.suggestions.first(where: { $0.node == id }) {
+                                SuggestionRow(model: model, suggestion: s)
+                            } else {
+                                SidebarRow(model: model, id: id, parentSize: tree.size(folder),
+                                           location: model.sidebarMode == .largest ? model.location(of: id) : nil)
+                            }
+                        }
+                        .id(id)
+                        .listRowBackground(rowBackground(id))
                     }
                     if let fold = model.sidebarFold {
                         SmallerObjectsRow(model: model, folder: folder, start: fold)
                     }
                 }
                 .listStyle(.plain)
+                .overlay {
+                    if items.isEmpty && model.sidebarMode != .contents {
+                        Text(model.sidebarMode == .largest ? "No files match these filters." : "Nothing obvious to clear here. Try Largest to find big files.")
+                            .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center).padding(24)
+                    }
+                }
                 .contextMenu(forSelectionType: NodeID.self) { ids in
                     if ids.count > 1 {
                         Button("Move \(ids.count) Items to Collector") { model.tree.sortedByOrder(Array(ids)).forEach(model.addToCollector) }
@@ -61,10 +73,78 @@ struct SidebarView: View {
     }
 }
 
+/// Title and summary above the list; in Largest mode, the filters.
+struct SidebarHeader: View {
+    let model: ResultsModel
+    let folder: NodeID
+
+    var body: some View {
+        let tree = model.tree
+        VStack(alignment: .leading, spacing: 6) {
+            switch model.sidebarMode {
+            case .contents:
+                Text(model.expandedSmallerObjects?.parent == folder ? "Smaller objects in \(model.displayName(folder))" : model.displayName(folder))
+                    .font(.headline).lineLimit(1).truncationMode(.middle)
+                Text("\(ByteFormat.string(tree.size(folder))) · ^[\(tree.itemCount(folder)) item](inflect: true)")
+                    .font(.caption).foregroundStyle(.secondary)
+            case .largest:
+                Text("Biggest files in \(model.displayName(folder))").font(.headline).lineLimit(1).truncationMode(.middle)
+                HStack {
+                    Picker("Kind", selection: Binding(get: { model.largestKind }, set: { model.largestKind = $0 })) {
+                        Text("All kinds").tag(FileKind?.none)
+                        Text("Videos").tag(FileKind?.some(.video))
+                        Text("Archives & disk images").tag(FileKind?.some(.archives))
+                        Text("Apps").tag(FileKind?.some(.apps))
+                        Text("Everything else").tag(FileKind?.some(.other))
+                    }
+                    Picker("Age", selection: Binding(get: { model.largestOlderThanMonths }, set: { model.largestOlderThanMonths = $0 })) {
+                        Text("Any age").tag(Int?.none)
+                        Text("Unchanged 6+ months").tag(Int?.some(6))
+                        Text("Unchanged 1+ year").tag(Int?.some(12))
+                    }
+                }
+                .labelsHidden().controlSize(.small)
+            case .suggestions:
+                Text("Usually safe to clear").font(.headline)
+                Text("Folders apps and tools rebuild on their own. Read the note before collecting.")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// A cleanup suggestion: what it is, why it's (usually) safe, and a one-click Collect.
+struct SuggestionRow: View {
+    let model: ResultsModel
+    let suggestion: CleanupSuggestion
+
+    var body: some View {
+        let id = suggestion.node
+        HStack(alignment: .top, spacing: 8) {
+            Image(nsImage: NSWorkspace.shared.icon(forFile: model.tree.path(id))).resizable().frame(width: 18, height: 18)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(suggestion.title).fontWeight(.medium)
+                Text(LocalizedStringKey(suggestion.note)).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 4)
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(ByteFormat.string(model.tree.size(id))).font(.callout.monospacedDigit()).foregroundStyle(.secondary)
+                Button(model.isCollected(id) ? "Collected" : "Collect") { model.addToCollector(id) }
+                    .controlSize(.small).disabled(model.isCollected(id))
+            }
+        }
+        .padding(.vertical, 2)
+        .onDrag { NSItemProvider(object: ResultsModel.dragURL(for: id, in: model) as NSURL) }
+    }
+}
+
 struct SidebarRow: View {
     let model: ResultsModel
     let id: NodeID
     let parentSize: UInt64
+    /// Where the file lives, shown in Largest mode (files come from many folders).
+    var location: String? = nil
 
     var body: some View {
         let tree = model.tree
@@ -80,6 +160,9 @@ struct SidebarRow: View {
                         .strikethrough(flags.contains(.deleted))
                     if flags.contains(.secondaryLink) { Text("hard link").font(.caption2).foregroundStyle(.secondary) }
                     if flags.contains(.restricted) { Image(systemName: "lock.fill").font(.caption2).foregroundStyle(.purple) }
+                }
+                if let location {
+                    Text(location).font(.caption2).foregroundStyle(.secondary).lineLimit(1).truncationMode(.head)
                 }
                 GeometryReader { g in
                     Capsule().fill(Color.secondary.opacity(0.35))
