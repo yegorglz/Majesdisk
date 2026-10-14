@@ -118,11 +118,17 @@ final class SunburstNSView: NSView {
             let key = [Int(model.center), model.treeVersion, model.collector.items.hashValue]
             if baseLayer == nil || key != baseKey, let layer = CGLayer(ctx, size: bounds.size, auxiliaryInfo: nil), let lctx = layer.context {
                 draw(segments, in: lctx, model: model, scale: 1, alpha: 1, highlight: nil)
+                shadeDepth(segments, in: lctx)
                 baseLayer = layer
                 baseKey = key
             }
             if let baseLayer { ctx.draw(baseLayer, at: .zero) }
-            if let i = hoveredIndex { draw([segments[i]], in: ctx, model: model, scale: 1, alpha: 1, highlight: 0) }
+            if let i = hoveredIndex {
+                ctx.saveGState()
+                ctx.setShadow(offset: .zero, blur: 14, color: SunburstPalette.color(for: segments[i], highlighted: true).nsColor.withAlphaComponent(0.9).cgColor)
+                draw([segments[i]], in: ctx, model: model, scale: 1, alpha: 1, highlight: 0)
+                ctx.restoreGState()
+            }
         }
         drawCenter(model: model)
     }
@@ -133,7 +139,7 @@ final class SunburstNSView: NSView {
         ctx.scaleBy(x: scale, y: scale)
         ctx.setAlpha(alpha)
         ctx.setStrokeColor(NSColor.windowBackgroundColor.cgColor)
-        ctx.setLineWidth(0.75 / scale)
+        ctx.setLineWidth(1.5 / scale)  // background-colored stroke = a clean gap between wedges
         for (i, s) in segs.enumerated() {
             let path = wedge(s, outer: outerRadius)
             var color = SunburstPalette.color(for: s, highlighted: i == highlight)
@@ -145,6 +151,30 @@ final class SunburstNSView: NSView {
         ctx.restoreGState()
     }
 
+    /// Darkens rings gently toward the rim so the map reads as depth, not a flat chart. Drawn once into the cache.
+    private func shadeDepth(_ segs: [SunburstSegment], in ctx: CGContext) {
+        guard !segs.isEmpty else { return }
+        ctx.saveGState()
+        ctx.translateBy(x: mapCenter.x, y: mapCenter.y)
+        for s in segs { ctx.addPath(wedge(s, outer: outerRadius)) }
+        ctx.clip(using: .evenOdd)
+        let r0 = config.centerRadius(outerRadius: outerRadius)
+        let colors = [NSColor.black.withAlphaComponent(0).cgColor, NSColor.black.withAlphaComponent(0.22).cgColor] as CFArray
+        if let g = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 1]) {
+            ctx.drawRadialGradient(g, startCenter: .zero, startRadius: r0, endCenter: .zero, endRadius: outerRadius, options: [])
+        }
+        ctx.restoreGState()
+    }
+
+    private var iconCache: [String: NSImage] = [:]
+    private func icon(for path: String) -> NSImage {
+        if let i = iconCache[path] { return i }
+        let i = NSWorkspace.shared.icon(forFile: path)
+        if iconCache.count > 200 { iconCache.removeAll() }
+        iconCache[path] = i
+        return i
+    }
+
     /// Segments mid-morph, clipped to the map's outer circle (deep rings start outside it).
     private func drawMorphed(_ segs: [SunburstSegment], from span: (start: Double, end: Double, depth: Int), progress: Double,
                              in ctx: CGContext, model: ResultsModel) {
@@ -153,7 +183,7 @@ final class SunburstNSView: NSView {
         ctx.addEllipse(in: CGRect(x: -outerRadius, y: -outerRadius, width: 2 * outerRadius, height: 2 * outerRadius))
         ctx.clip()
         ctx.setStrokeColor(NSColor.windowBackgroundColor.cgColor)
-        ctx.setLineWidth(0.75)
+        ctx.setLineWidth(1.5)
         for s in segs {
             let m = MapTransition.morph(s, from: span, progress: progress)
             var shown = s
@@ -197,24 +227,33 @@ final class SunburstNSView: NSView {
 
         let tree = model.tree
         let shown: (String, UInt64)
+        var iconPath: String?
         if let r = model.hoveredSmallerObjects {
             let items = tree.children(r.parent).dropFirst(r.start)
             shown = ("\(items.count) smaller objects", items.reduce(0) { $0 + tree.size($1) })
         } else {
             let id = model.hovered ?? model.rowHovered ?? model.center
             shown = (model.displayName(id), tree.size(id))
+            if tree.virtualKind(id) == nil { iconPath = tree.path(id) }
+        }
+        let iconSide = min(30, r0 * 0.42)
+        if let iconPath, r0 > 46 {
+            icon(for: iconPath).draw(in: CGRect(x: mapCenter.x - iconSide / 2, y: mapCenter.y - 24 - iconSide - 2, width: iconSide, height: iconSide),
+                                     from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
         }
         let para = NSMutableParagraphStyle()
         para.alignment = .center
         para.lineBreakMode = .byTruncatingMiddle
         let nameAttrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 13, weight: .semibold), .foregroundColor: NSColor.labelColor, .paragraphStyle: para]
-        let sizeAttrs: [NSAttributedString.Key: Any] = [.font: NSFont.monospacedDigitSystemFont(ofSize: 17, weight: .regular), .foregroundColor: NSColor.labelColor, .paragraphStyle: para]
+        let rounded = NSFont.systemFont(ofSize: 19, weight: .semibold).fontDescriptor.withDesign(.rounded)
+        let sizeFont = rounded.flatMap { NSFont(descriptor: $0, size: 19) } ?? NSFont.monospacedDigitSystemFont(ofSize: 19, weight: .semibold)
+        let sizeAttrs: [NSAttributedString.Key: Any] = [.font: sizeFont, .foregroundColor: NSColor.labelColor, .paragraphStyle: para]
         let w = r0 * 1.6
         (shown.0 as NSString).draw(with: CGRect(x: mapCenter.x - w / 2, y: mapCenter.y - 22, width: w, height: 18), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: nameAttrs)
-        (ByteFormat.string(shown.1) as NSString).draw(with: CGRect(x: mapCenter.x - w / 2, y: mapCenter.y, width: w, height: 22), options: [.usesLineFragmentOrigin], attributes: sizeAttrs)
+        (ByteFormat.string(shown.1) as NSString).draw(with: CGRect(x: mapCenter.x - w / 2, y: mapCenter.y - 1, width: w, height: 26), options: [.usesLineFragmentOrigin], attributes: sizeAttrs)
         if model.tree.parent(model.center) != nil {
             let up = NSAttributedString(string: "▲", attributes: [.font: NSFont.systemFont(ofSize: 9), .foregroundColor: NSColor.secondaryLabelColor])
-            up.draw(at: CGPoint(x: mapCenter.x - up.size().width / 2, y: mapCenter.y - r0 + 10))
+            up.draw(at: CGPoint(x: mapCenter.x - up.size().width / 2, y: mapCenter.y + 30))  // "click to go up", below the size
         }
     }
 

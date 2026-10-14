@@ -1,9 +1,11 @@
 import MajesCore
 import SwiftUI
 
-/// Horizontal fill gauge: green while at least half is free, then orange, then red.
+/// A small ring that echoes the map: filled share of the disk, green while at least half is free,
+/// then orange, then red. Percent used in the middle.
 struct GaugeView: View {
     let fraction: Double
+    var lineWidth: CGFloat = 6
 
     var color: Color {
         switch GaugeLevel.forFraction(fraction) {
@@ -14,14 +16,16 @@ struct GaugeView: View {
     }
 
     var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Capsule().fill(Color.secondary.opacity(0.2))
-                Capsule().fill(color.gradient).frame(width: max(6, geo.size.width * min(1, fraction)))
-            }
+        ZStack {
+            Circle().stroke(Color.secondary.opacity(0.18), lineWidth: lineWidth)
+            Circle()
+                .trim(from: 0, to: max(0.02, min(1, fraction)))
+                .stroke(color.gradient, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+            Text(fraction, format: .percent.precision(.fractionLength(0)))
+                .font(.system(.caption, design: .rounded).weight(.semibold)).monospacedDigit()
         }
-        .frame(height: 8)
-        .animation(.easeInOut(duration: 0.3), value: fraction)
+        .animation(.easeInOut(duration: 0.4), value: fraction)
         .accessibilityElement()
         .accessibilityLabel("\(Int(fraction * 100)) percent full")
     }

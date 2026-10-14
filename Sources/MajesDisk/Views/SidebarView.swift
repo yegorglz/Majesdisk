@@ -14,7 +14,7 @@ struct SidebarView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(model.expandedSmallerObjects?.parent == folder ? "Smaller objects in \(model.displayName(folder))" : model.displayName(folder))
                     .font(.headline).lineLimit(1).truncationMode(.middle)
-                Text("\(ByteFormat.string(tree.size(folder))) · \(tree.itemCount(folder).formatted()) items")
+                Text("\(ByteFormat.string(tree.size(folder))) · ^[\(tree.itemCount(folder)) item](inflect: true)")
                     .font(.caption).foregroundStyle(.secondary)
             }
             .padding(12)
@@ -61,7 +61,10 @@ struct SidebarRow: View {
         let tree = model.tree
         let flags = tree.flags(id)
         HStack(spacing: 8) {
-            Circle().fill(Color(nsColor: model.color(for: id).nsColor)).frame(width: 10, height: 10)
+            Circle().fill(Color(nsColor: model.color(for: id).nsColor)).frame(width: 8, height: 8)
+            if tree.virtualKind(id) == nil {
+                Image(nsImage: NSWorkspace.shared.icon(forFile: tree.path(id))).resizable().frame(width: 18, height: 18)
+            }
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
                     Text(model.displayName(id)).lineLimit(1).truncationMode(.middle)
@@ -76,7 +79,14 @@ struct SidebarRow: View {
                 .frame(height: 3)
             }
             Spacer(minLength: 4)
-            Text(ByteFormat.string(tree.size(id))).font(.callout.monospacedDigit()).foregroundStyle(.secondary)
+            VStack(alignment: .trailing, spacing: 1) {
+                Text(ByteFormat.string(tree.size(id))).font(.callout.monospacedDigit())
+                if parentSize > 0 {
+                    Text(Double(tree.size(id)) / Double(parentSize), format: .percent.precision(.fractionLength(0...1)))
+                        .font(.caption2.monospacedDigit()).foregroundStyle(.tertiary)
+                }
+            }
+            .foregroundStyle(.secondary)
         }
         .contentShape(Rectangle())
         .onHover { inside in

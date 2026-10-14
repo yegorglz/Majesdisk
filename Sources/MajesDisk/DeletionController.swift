@@ -15,10 +15,13 @@ struct AlertInfo: Identifiable {
 final class DeletionController {
     enum Phase: Equatable { case idle, countdown(remaining: Int), deleting }
     var phase: Phase = .idle
+    /// When the countdown ends; drives the draining ring.
+    var deadline = Date()
     @ObservationIgnored private var task: Task<Void, Never>?
 
     func begin(model: ResultsModel) {
         guard phase == .idle, !model.collector.items.isEmpty else { return }
+        deadline = Date().addingTimeInterval(5)
         task = Task { [weak self] in
             for remaining in stride(from: 5, through: 1, by: -1) {
                 self?.phase = .countdown(remaining: remaining)

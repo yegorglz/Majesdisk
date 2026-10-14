@@ -27,7 +27,8 @@ struct CollectorBarView: View {
             Spacer()
             switch model.deletion.phase {
             case .countdown(let n):
-                Text("Deleting in \(n)…").foregroundStyle(.secondary).monospacedDigit()
+                CountdownRing(deadline: model.deletion.deadline, seconds: n)
+                Text(model.deleteMode == .moveToTrash ? "Moving to Trash…" : "Deleting…").foregroundStyle(.secondary)
                 Button("Cancel") { model.deletion.cancel() }.keyboardShortcut(.cancelAction)
             case .deleting:
                 ProgressView().controlSize(.small)
@@ -96,4 +97,26 @@ extension ResultsModel {
     }
 
     static func dragURL(for id: NodeID) -> URL { URL(string: "majesdisk-node://\(id)")! }
+}
+
+/// The 5-second fuse before a delete: a red ring that drains smoothly, seconds left in the middle.
+struct CountdownRing: View {
+    let deadline: Date
+    let seconds: Int
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        TimelineView(.animation(paused: reduceMotion)) { context in
+            let left = reduceMotion ? Double(seconds) : max(0, deadline.timeIntervalSince(context.date))
+            ZStack {
+                Circle().stroke(Color.red.opacity(0.2), lineWidth: 3)
+                Circle().trim(from: 0, to: left / 5)
+                    .stroke(Color.red, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                Text("\(seconds)").font(.system(.caption, design: .rounded).weight(.bold)).monospacedDigit()
+            }
+        }
+        .frame(width: 26, height: 26)
+        .accessibilityLabel("Deleting in \(seconds) seconds")
+    }
 }
