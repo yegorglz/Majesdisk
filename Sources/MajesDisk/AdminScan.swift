@@ -11,8 +11,12 @@ enum Helper {
         return Bundle.main.executableURL!.deletingLastPathComponent().appendingPathComponent("majes-helper").path
     }
 
+    #if DEBUG
     /// Debug: `--debug-no-elevation` runs the same helper pipeline without the password prompt.
     static var elevate = !CommandLine.arguments.contains("--debug-no-elevation")
+    #else
+    static let elevate = true
+    #endif
 }
 
 /// One `majes-helper scan` run as root: progress is polled from a file, cancel is a file the helper watches.

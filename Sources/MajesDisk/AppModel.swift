@@ -73,7 +73,9 @@ final class AppModel {
             case .finished(let tree):
                 let results = ResultsModel(tree: tree, volume: session.volume, asAdministrator: asAdministrator)
                 self.present(results)
+                #if DEBUG
                 self.applyDebugArguments(to: results)
+                #endif
             case .failed(let message):
                 self.screen = .overview
                 let alert = NSAlert(); alert.messageText = "Scan failed"; alert.informativeText = message; alert.runModal()
@@ -131,6 +133,7 @@ final class AppModel {
         cachedResults[path] = nil
     }
 
+    #if DEBUG
     /// Debug: `--collect <path>` (repeatable) fills the Collector; `--delete-collected` starts Delete.
     private func applyDebugArguments(to results: ResultsModel) {
         let args = CommandLine.arguments
@@ -139,6 +142,7 @@ final class AppModel {
         }
         if args.contains("--delete-collected") { results.deletion.begin(model: results) }
     }
+    #endif
 
     /// `--scan <path>` opens straight into a scan (handy for testing).
     func handleLaunchArguments() {
