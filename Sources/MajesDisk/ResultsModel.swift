@@ -135,8 +135,8 @@ final class ResultsModel {
 
     /// Frees nodes left behind by deletes and rescans once they outnumber the live ones.
     func compactIfNeeded() {
-        // A running rescan holds node IDs; it compacts when it finishes.
-        guard !isRescanning, tree.garbageCount > tree.nodeCount - tree.garbageCount else { return }
+        // A running rescan or delete holds node IDs; each compacts when it finishes.
+        guard !isRescanning, deletion.phase != .deleting, tree.garbageCount > tree.nodeCount - tree.garbageCount else { return }
         let map = tree.compact()
         history = NavigationHistory(start: map[center] ?? tree.root)
         collector.remap(map)

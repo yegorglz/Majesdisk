@@ -28,6 +28,7 @@ final class DeletionController {
             self?.phase = .deleting
             await model.deleteCollected()
             self?.phase = .idle
+            model.compactIfNeeded()
         }
     }
 
