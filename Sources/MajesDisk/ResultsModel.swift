@@ -76,6 +76,14 @@ final class ResultsModel {
         return sidebarAnchor ?? center
     }
 
+    /// In the Collector itself or inside a collected folder: Delete will remove it.
+    func isCollected(_ id: NodeID) -> Bool {
+        let held = Set(collector.items)
+        var cur: NodeID? = id
+        while let c = cur { if held.contains(c) { return true }; cur = tree.parent(c) }
+        return false
+    }
+
     /// A row picked in the sidebar: keep that list on screen and let the keyboard drive from there.
     func selectFromSidebar(_ id: NodeID?) {
         guard id != selected else { return }

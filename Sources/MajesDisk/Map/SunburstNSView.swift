@@ -143,7 +143,7 @@ final class SunburstNSView: NSView {
         for (i, s) in segs.enumerated() {
             let path = wedge(s, outer: outerRadius)
             var color = SunburstPalette.color(for: s, highlighted: i == highlight)
-            if s.kind != .smallerObjects, model.collector.contains(s.node) { color.a *= 0.35 }
+            if !model.collector.items.isEmpty, model.isCollected(s.node) { color.a *= 0.35 }  // covers a collected folder's contents
             ctx.addPath(path)
             ctx.setFillColor(color.nsColor.cgColor)
             ctx.drawPath(using: .eoFillStroke)  // even-odd keeps full-circle rings hollow
@@ -189,7 +189,7 @@ final class SunburstNSView: NSView {
             var shown = s
             (shown.startAngle, shown.endAngle, shown.depth) = (m.startAngle, m.endAngle, Int(m.depth.rounded()))
             var color = SunburstPalette.color(for: shown, highlighted: false)
-            if s.kind != .smallerObjects, model.collector.contains(s.node) { color.a *= 0.35 }
+            if !model.collector.items.isEmpty, model.isCollected(s.node) { color.a *= 0.35 }  // covers a collected folder's contents
             ctx.addPath(wedge(start: m.startAngle, end: m.endAngle, depth: m.depth, outer: outerRadius))
             ctx.setFillColor(color.nsColor.cgColor)
             ctx.drawPath(using: .eoFillStroke)
