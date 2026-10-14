@@ -23,9 +23,25 @@ final class ScanSession {
     @ObservationIgnored var helperScan: HelperScan?
 
     let store: ScanStore?
+    let startedAt = Date()
+    /// What the scan should add up to: the disk's used space, or the last scan of the folder. Nil if unknown.
+    let expectedBytes: UInt64?
 
-    init(rootPath: String, asAdministrator: Bool, volume: VolumeInfo?, store: ScanStore? = nil) {
+    init(rootPath: String, asAdministrator: Bool, volume: VolumeInfo?, store: ScanStore? = nil, expectedBytes: UInt64? = nil) {
         self.rootPath = rootPath; self.asAdministrator = asAdministrator; self.volume = volume; self.store = store
+        self.expectedBytes = expectedBytes ?? volume.map { $0.usedBytes }
+    }
+
+    /// Share done and seconds left. Capped at 99% (hidden space makes "used" an overestimate);
+    /// no time guess until 5% is done.
+    static func estimate(bytes: UInt64, expected: UInt64?, elapsed: TimeInterval) -> (fraction: Double?, remaining: TimeInterval?) {
+        guard let expected, expected > 0 else { return (nil, nil) }
+        let f = min(0.99, Double(bytes) / Double(expected))
+        return (f, f >= 0.05 && elapsed > 1 ? elapsed * (1 - f) / f : nil)
+    }
+
+    func estimate(at now: Date = Date()) -> (fraction: Double?, remaining: TimeInterval?) {
+        Self.estimate(bytes: progress.bytes, expected: expectedBytes, elapsed: now.timeIntervalSince(startedAt))
     }
 
     func start() {

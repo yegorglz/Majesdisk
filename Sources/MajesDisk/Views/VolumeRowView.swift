@@ -18,6 +18,9 @@ struct VolumeRowView: View {
             }
             .frame(width: 220, alignment: .leading)
             Spacer(minLength: 12)
+            if let session = model.scans[volume.mountPath] {
+                ScanRowProgress(session: session)
+            } else {
             GaugeView(fraction: volume.usedFraction(purgeableAsUsed: model.optionKeyDown)).frame(width: 46, height: 46)
             VStack(alignment: .trailing, spacing: 2) {
                 Text(ByteFormat.string(model.optionKeyDown ? volume.availableBytes : volume.freeBytes))
@@ -28,6 +31,7 @@ struct VolumeRowView: View {
             .frame(minWidth: 120, alignment: .trailing)
             .help("\(ByteFormat.string(volume.usedBytes)) used of \(ByteFormat.string(volume.totalBytes))")
             ScanMenuButton(path: volume.mountPath, volume: volume)
+            }
         }
         .padding(.vertical, 8)
     }
@@ -54,7 +58,7 @@ struct FolderRowView: View {
                 ScannedLabel(path: path)
             }
             Spacer()
-            ScanMenuButton(path: path, volume: nil)
+            if let session = model.scans[path] { ScanRowProgress(session: session) } else { ScanMenuButton(path: path, volume: nil) }
         }
         .padding(.vertical, 6)
     }
@@ -105,5 +109,43 @@ struct ScannedLabel: View {
         if let date = model.savedScans[path] {
             Text("Scanned \(date.formatted(.relative(presentation: .named)))").font(.caption2).foregroundStyle(.tertiary)
         }
+    }
+}
+
+/// A scan running in its row: a ring that fills as the scan goes (spinning when the total is unknown),
+/// how far along it is and roughly how long is left, and Stop.
+struct ScanRowProgress: View {
+    let session: ScanSession
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.5)) { context in
+            let e = session.estimate(at: context.date)
+            HStack(spacing: 12) {
+                ZStack {
+                    if let f = e.fraction {
+                        GaugeView(fraction: f, tint: .accentColor)
+                    } else {
+                        ProgressView().controlSize(.small)
+                    }
+                }
+                .frame(width: 46, height: 46)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(summary(e)).font(.system(.callout, design: .rounded).weight(.semibold)).monospacedDigit()
+                    Text(session.progress.currentPath).font(.caption2).foregroundStyle(.secondary)
+                        .lineLimit(1).truncationMode(.middle).frame(maxWidth: 220, alignment: .trailing)
+                }
+                .frame(minWidth: 120, alignment: .trailing)
+                Button("Stop") { session.cancel() }
+            }
+        }
+    }
+
+    func summary(_ e: (fraction: Double?, remaining: TimeInterval?)) -> String {
+        let scanned = "\(ByteFormat.string(session.progress.bytes)) · \(session.progress.files.formatted()) files"
+        guard let left = e.remaining else { return session.asAdministrator ? "As administrator · \(scanned)" : scanned }
+        let fmt = DateComponentsFormatter()
+        fmt.allowedUnits = left >= 60 ? [.minute] : [.second]
+        fmt.unitsStyle = .short
+        return "\(fmt.string(from: max(1, left)) ?? "") left · \(ByteFormat.string(session.progress.bytes))"
     }
 }

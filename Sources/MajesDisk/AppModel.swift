@@ -9,7 +9,7 @@ final class AppModel {
     /// Scans saved on disk by root path, with their date: they can be shown again after a relaunch.
     var savedScans: [String: Date] = [:]
 
-    enum Screen { case overview, scanning(ScanSession), results(ResultsModel) }
+    enum Screen { case overview, results(ResultsModel) }
 
     var screen: Screen = .overview
     var volumes: [VolumeInfo] = []
@@ -27,6 +27,8 @@ final class AppModel {
     var snapshotsVolume: VolumeInfo?
     /// Finished scans by root path. Going back to the overview keeps them ("Show"); only Forget drops them.
     var cachedResults: [String: ResultsModel] = [:]
+    /// Scans in progress by root path. They run from the overview rows, several at once.
+    var scans: [String: ScanSession] = [:]
     @ObservationIgnored private var refreshing = false
     @ObservationIgnored var warnedAboutAccess = false
     /// A saved scan being read from disk.
@@ -98,26 +100,31 @@ final class AppModel {
             default: return
             }
         }
+        guard scans[path] == nil else { return }
         leaveResults()
+        screen = .overview
         if volume(forPath: path) == nil, !recentFolders.contains(path) { recentFolders.insert(path, at: 0) }
-        let session = ScanSession(rootPath: path, asAdministrator: asAdministrator, volume: volume(forPath: path), store: store)
+        let expected = cachedResults[path].map { $0.tree.size($0.tree.root) }
+        let session = ScanSession(rootPath: path, asAdministrator: asAdministrator, volume: volume(forPath: path), store: store, expectedBytes: expected)
         session.onFinish = { [weak self] state in
             guard let self else { return }
+            self.scans[path] = nil
             switch state {
             case .finished(let tree, let previous):
                 self.savedScans[path] = Date()
                 let results = ResultsModel(tree: tree, volume: session.volume, asAdministrator: asAdministrator, previous: previous)
-                self.present(results)
+                self.cachedResults[path] = results
+                // Open it if the user is still on the overview; otherwise its row now says "Show".
+                if case .overview = self.screen { self.present(results) }
                 #if DEBUG
                 self.applyDebugArguments(to: results)
                 #endif
             case .failed(let message):
-                self.screen = .overview
-                let alert = NSAlert(); alert.messageText = "Scan failed"; alert.informativeText = message; alert.runModal()
-            case .cancelled, .running: self.screen = .overview
+                let alert = NSAlert(); alert.messageText = "Couldn't scan “\((path as NSString).lastPathComponent)”"; alert.informativeText = message; alert.runModal()
+            case .cancelled, .running: break
             }
         }
-        screen = .scanning(session)
+        scans[path] = session
         session.start()
     }
 

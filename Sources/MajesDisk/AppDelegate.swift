@@ -6,7 +6,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Quitting mid-scan stops the scan, including a root helper (it watches for its cancel file).
     func applicationWillTerminate(_ notification: Notification) {
         MainActor.assumeIsolated {
-            if case .scanning(let session) = AppModel.shared.screen { session.cancel() }
+            AppModel.shared.scans.values.forEach { $0.cancel() }
             AppModel.shared.saveEditedResults()
         }
     }

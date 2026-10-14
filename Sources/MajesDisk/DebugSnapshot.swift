@@ -26,8 +26,6 @@ enum DebugSnapshot {
             lines.append("screen: overview")
             lines += app.volumes.map { "volume: \($0.name) \($0.mountPath) free=\($0.freeBytes)" }
             lines += app.folderList.map { "folder: \($0) cached=\(app.cachedResults[$0] != nil)" }
-        case .scanning(let s):
-            lines.append("screen: scanning \(s.rootPath) admin=\(s.asAdministrator) files=\(s.progress.files)")
         case .results(let r):
             lines.append("screen: results \(r.tree.rootPath) admin=\(r.asAdministrator)")
             lines.append("root size=\(r.tree.size(r.tree.root)) items=\(r.tree.itemCount(r.tree.root)) nodes=\(r.tree.nodeCount)")
@@ -36,6 +34,7 @@ enum DebugSnapshot {
             lines.append("collector: \(r.collector.items.map(r.tree.path)) deletion=\(r.deletion.phase)")
             if let a = r.alert { lines.append("alert: \(a.title) — \(a.message)") }
         }
+        lines += app.scans.values.map { "scanning: \($0.rootPath) files=\($0.progress.files) fraction=\($0.estimate().fraction.map { String(format: "%.2f", $0) } ?? "?")" }
         lines.append("cached: \(app.cachedResults.keys.sorted())")
         return lines.joined(separator: "\n") + "\n"
     }

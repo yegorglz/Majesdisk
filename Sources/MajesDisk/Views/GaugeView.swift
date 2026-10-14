@@ -6,12 +6,15 @@ import SwiftUI
 struct GaugeView: View {
     let fraction: Double
     var lineWidth: CGFloat = 6
+    /// Fixed color (scan progress); nil = disk-fullness colors.
+    var tint: Color? = nil
 
     var color: Color {
+        if let tint { return tint }
         switch GaugeLevel.forFraction(fraction) {
-        case .green: .green
-        case .orange: .orange
-        case .red: .red
+        case .green: return .green
+        case .orange: return .orange
+        case .red: return .red
         }
     }
 
