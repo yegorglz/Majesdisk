@@ -198,3 +198,23 @@ import Testing
     #expect(m.collector.items.isEmpty)
     #expect(Set(m.nodes(forDropped: ResultsModel.dragURL(for: ids[2], in: m))) == range)
 }
+
+@MainActor @Test func largestModeListsBigFilesAndFiltersByAge() throws {
+    let d = FileManager.default.temporaryDirectory.appendingPathComponent("majes-big-\(UUID().uuidString)").path
+    try FileManager.default.createDirectory(atPath: "\(d)/a/b/c", withIntermediateDirectories: true)
+    FileManager.default.createFile(atPath: "\(d)/a/b/c/new.mov", contents: Data(count: 300_000))
+    FileManager.default.createFile(atPath: "\(d)/a/old.zip", contents: Data(count: 200_000))
+    FileManager.default.createFile(atPath: "\(d)/small.txt", contents: Data(count: 50_000))
+    let twoYearsAgo = Date().addingTimeInterval(-2 * 365 * 86_400)
+    try FileManager.default.setAttributes([.modificationDate: twoYearsAgo], ofItemAtPath: "\(d)/a/old.zip")
+    defer { try? FileManager.default.removeItem(atPath: d) }
+    let m = ResultsModel(tree: DiskScanner(options: ScanOptions(rootPath: d)).run()!, volume: nil, asAdministrator: false)
+    m.sidebarMode = .largest
+    m.hovered = m.tree.node(atPath: "\(d)/a")       // hovering the map doesn't change the Largest list
+    #expect(m.sidebarItems.map(m.tree.name) == ["new.mov", "old.zip", "small.txt"])
+    m.largestOlderThanMonths = 12
+    #expect(m.sidebarItems.map(m.tree.name) == ["old.zip"])
+    m.largestOlderThanMonths = nil
+    m.largestKind = .video
+    #expect(m.sidebarItems.map(m.tree.name) == ["new.mov"])
+}

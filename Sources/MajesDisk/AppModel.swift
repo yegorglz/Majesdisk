@@ -163,6 +163,8 @@ final class AppModel {
             if let id = results.tree.node(atPath: args[i + 1]) { results.addToCollector(id) }
         }
         if args.contains("--delete-collected") { results.deletion.begin(model: results) }
+        if let i = args.firstIndex(of: "--sidebar"), i + 1 < args.count,
+           let mode = SidebarMode.allCases.first(where: { $0.rawValue.lowercased() == args[i + 1] }) { results.sidebarMode = mode }
     }
     #endif
 

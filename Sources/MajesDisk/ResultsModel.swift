@@ -6,6 +6,10 @@ import Observation
 /// A folder's tail of tiny children merged into one "smaller objects" wedge.
 struct SmallerObjectsRef: Equatable { var parent: NodeID; var start: Int }
 
+/// What the sidebar lists: the pointed folder's contents, the biggest files under the map center,
+/// or cleanup suggestions.
+enum SidebarMode: String, CaseIterable { case contents = "Contents", largest = "Largest", suggestions = "Suggestions" }
+
 @MainActor @Observable
 final class ResultsModel {
     let tree: FileTree
@@ -32,6 +36,19 @@ final class ResultsModel {
     let deletion = DeletionController()
     var alert: AlertInfo?
     var isRescanning = false
+    var sidebarMode: SidebarMode = .contents
+    var largestKind: FileKind?
+    var largestOlderThanMonths: Int?
+    @ObservationIgnored private var largestCache: (key: [Int], items: [NodeID])?
+    @ObservationIgnored private var suggestionsCache: (version: Int, items: [CleanupSuggestion])?
+
+    /// Known regenerable space hogs in this scan (whole scan, not just the map center).
+    var suggestions: [CleanupSuggestion] {
+        if let c = suggestionsCache, c.version == treeVersion { return c.items }
+        let items = CleanupSuggestions.find(in: tree, extraHomes: [NSHomeDirectory()]).filter { !tree.isGone($0.node) }
+        suggestionsCache = (treeVersion, items)
+        return items
+    }
     @ObservationIgnored private var layoutCache: (key: [Int], segments: [SunburstSegment])?
 
     init(tree: FileTree, volume: VolumeInfo?, asAdministrator: Bool) {
@@ -77,9 +94,38 @@ final class ResultsModel {
 
     /// The sidebar follows the pointed folder (or a pointed file's folder), else the map center.
     var sidebarFolder: NodeID {
+        if sidebarMode != .contents { return center }
         if let s = hoveredSmallerObjects { return s.parent }
         if let h = hovered { return isContainer(h) && !tree.children(h).isEmpty ? h : (tree.parent(h) ?? center) }
         return sidebarAnchor ?? center
+    }
+
+    /// The 200 biggest files under the map center, optionally of one kind and untouched for N months.
+    var largestItems: [NodeID] {
+        let key = [Int(center), treeVersion, FileKind.allCases.firstIndex { $0 == largestKind } ?? -1, largestOlderThanMonths ?? 0]
+        if let c = largestCache, c.key == key { return c.items }
+        var items: [NodeID]
+        if let months = largestOlderThanMonths {
+            // Dates aren't kept in the tree: check them only for the top candidates.
+            let cutoff = Date().addingTimeInterval(-Double(months) * 30.4 * 86_400)
+            items = tree.largestFiles(under: center, limit: 2_000, kind: largestKind).filter { id in
+                var st = stat()
+                guard lstat(tree.path(id), &st) == 0 else { return false }
+                return Date(timeIntervalSince1970: TimeInterval(st.st_mtimespec.tv_sec)) < cutoff
+            }
+            items = Array(items.prefix(200))
+        } else {
+            items = tree.largestFiles(under: center, limit: 200, kind: largestKind)
+        }
+        largestCache = (key, items)
+        return items
+    }
+
+    /// A node's folder relative to the map center, for rows listed out of their folder.
+    func location(of id: NodeID) -> String {
+        guard let parent = tree.parent(id) else { return "" }
+        let base = tree.path(center), full = tree.path(parent)
+        return full == base ? displayName(center) : String(full.dropFirst(base.hasSuffix("/") ? base.count : base.count + 1))
     }
 
     /// In the Collector itself or inside a collected folder: Delete will remove it.
@@ -101,6 +147,11 @@ final class ResultsModel {
     }
 
     var sidebarItems: [NodeID] {
+        switch sidebarMode {
+        case .largest: return largestItems
+        case .suggestions: return suggestions.map(\.node)
+        case .contents: break
+        }
         let all = tree.children(sidebarFolder)
         if let s = expandedSmallerObjects, s.parent == sidebarFolder, s.start < all.count { return Array(all[s.start...]) }
         return Array(all.prefix(sidebarFold ?? all.count))
@@ -110,7 +161,7 @@ final class ResultsModel {
     /// measured as if the folder were the center. Nil when nothing (or only one item) would fold.
     var sidebarFold: Int? {
         let folder = sidebarFolder
-        guard expandedSmallerObjects?.parent != folder, tree.size(folder) > 0 else { return nil }
+        guard sidebarMode == .contents, expandedSmallerObjects?.parent != folder, tree.size(folder) > 0 else { return nil }
         let all = tree.children(folder)
         let total = Double(tree.size(folder))
         guard let i = all.firstIndex(where: { 2 * .pi * Double(tree.size($0)) / total < SunburstConfig().minSegmentAngle }),
