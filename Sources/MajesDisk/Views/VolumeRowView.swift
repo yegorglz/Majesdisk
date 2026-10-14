@@ -16,15 +16,16 @@ struct VolumeRowView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             .frame(width: 220, alignment: .leading)
-            VStack(alignment: .leading, spacing: 4) {
-                GaugeView(fraction: volume.usedFraction(purgeableAsUsed: model.optionKeyDown))
-                Text(model.optionKeyDown
-                     ? "\(ByteFormat.string(volume.availableBytes)) free (\(ByteFormat.string(volume.purgeableBytes)) purgeable)"
-                     : "\(ByteFormat.string(volume.freeBytes)) free")
-                    .font(.caption).foregroundStyle(.secondary)
-                    .help("\(ByteFormat.string(volume.usedBytes)) used")
-            }
             Spacer(minLength: 12)
+            GaugeView(fraction: volume.usedFraction(purgeableAsUsed: model.optionKeyDown)).frame(width: 46, height: 46)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(ByteFormat.string(model.optionKeyDown ? volume.availableBytes : volume.freeBytes))
+                    .font(.system(.title3, design: .rounded).weight(.semibold)).monospacedDigit()
+                Text(model.optionKeyDown ? "free, \(ByteFormat.string(volume.purgeableBytes)) purgeable counted as used" : "free")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            .frame(minWidth: 120, alignment: .trailing)
+            .help("\(ByteFormat.string(volume.usedBytes)) used of \(ByteFormat.string(volume.totalBytes))")
             ScanMenuButton(path: volume.mountPath, volume: volume)
         }
         .padding(.vertical, 8)
