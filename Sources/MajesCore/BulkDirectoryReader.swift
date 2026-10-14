@@ -85,7 +85,6 @@ public struct BulkDirectoryReader: DirectoryReading {
         return DirEntry(name: name, kind: kind, allocatedSize: UInt64(max(0, allocSize)), fileID: fileID,
                         linkCount: linkCount, cloneID: cloneID, cloneRefCount: cloneRefs,
                         isMountPoint: mountStatus & UInt32(DIR_MNTSTATUS_MNTPOINT) != 0,
-                        isCompressed: flags & UInt32(UF_COMPRESSED) != 0,
                         isDataless: flags & 0x4000_0000 != 0)  // SF_DATALESS: iCloud placeholder
     }
 }

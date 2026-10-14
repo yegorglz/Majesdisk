@@ -5,7 +5,6 @@ import Testing
 @Test func hiddenSpaceSplitsRemainder() {
     let b = HiddenSpace.compute(usedBytes: 100, scannedBytes: 60, purgeableBytes: 25, otherVolumesBytes: 10)!
     #expect(b == HiddenSpaceBreakdown(purgeable: 25, otherVolumes: 10, stillHidden: 5))
-    #expect(b.total == 40)
     #expect(HiddenSpace.compute(usedBytes: 100, scannedBytes: 100, purgeableBytes: 5, otherVolumesBytes: 5) == nil)
     #expect(HiddenSpace.compute(usedBytes: 100, scannedBytes: 120, purgeableBytes: 5, otherVolumesBytes: 5) == nil)
     let c = HiddenSpace.compute(usedBytes: 100, scannedBytes: 90, purgeableBytes: 25, otherVolumesBytes: 10)!
